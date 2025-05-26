@@ -1,11 +1,10 @@
-# Run and deploy your AI Studio app
+# NutriPlanner
 
-This contains everything you need to run your app locally.
+This contains everything you need to run your app locally (originally from AI Studio app).
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
