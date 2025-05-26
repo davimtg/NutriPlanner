@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
-import { Ingredient, Recipe, RecipeIngredient, CsvIngredient, CsvRecipe, NutrientInfo } from '../types';
+import { Ingredient, Recipe, RecipeIngredient, CsvIngredient, CsvRecipe, NutrientInfo, ImportBatch } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { UNITS_OF_MEASUREMENT, CSV_INGREDIENT_HEADERS, CSV_RECIPE_HEADERS, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL } from '../constants';
-import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload } from '../components/Icon';
+import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch } from '../components/Icon';
 import Papa from 'papaparse';
 
 
@@ -214,9 +213,10 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ initialRecipe, onSubmit, onCanc
 
 export default function DataManagementPage(): React.ReactElement {
   const { 
-    ingredients, recipes, addIngredient, updateIngredient, deleteIngredient, 
+    ingredients, recipes, addIngredient, updateIngredient, deleteIngredient, deleteAllIngredients,
     addRecipe, updateRecipe, deleteRecipe: deleteRecipeData, 
-    importIngredients, importRecipes, getIngredientById, getRecipeById
+    importIngredients, importRecipes, getIngredientById, getRecipeById,
+    importBatches, deleteImportBatch
   } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -225,6 +225,11 @@ export default function DataManagementPage(): React.ReactElement {
   
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | undefined>(undefined);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
+  const [ingredientSearchTerm, setIngredientSearchTerm] = useState('');
+  const [showDeleteAllIngredientsModal, setShowDeleteAllIngredientsModal] = useState(false);
+  const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
+  const [batchToDelete, setBatchToDelete] = useState<ImportBatch | null>(null);
+
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<'ingredients' | 'recipes'>('ingredients');
@@ -255,10 +260,10 @@ export default function DataManagementPage(): React.ReactElement {
       }
     } else if (viewParam) {
       setActiveView(viewParam as any);
-    } else {
-      setActiveView('ingredients');
+    } else if (!activeView.startsWith('edit')) { // Preserve edit views if no params change
+        setActiveView('ingredients');
     }
-  }, [searchParams, getIngredientById, getRecipeById, navigate]);
+  }, [searchParams, getIngredientById, getRecipeById, navigate, activeView]);
 
   const updateView = (view: string, params?: Record<string, string>) => {
     const newParams = new URLSearchParams(); 
@@ -269,6 +274,7 @@ export default function DataManagementPage(): React.ReactElement {
         }
     }
     setSearchParams(newParams);
+    // setActiveView will be updated by useEffect based on searchParams
   };
 
 
@@ -310,6 +316,7 @@ export default function DataManagementPage(): React.ReactElement {
       alert("Por favor, selecione um arquivo CSV.");
       return;
     }
+    const currentFilename = csvFile.name; // Store filename before it's cleared
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
@@ -322,9 +329,9 @@ export default function DataManagementPage(): React.ReactElement {
             return;
           }
           if (importType === 'ingredients') {
-            setImportResults(importIngredients(results.data as CsvIngredient[]));
+            setImportResults(importIngredients(results.data as CsvIngredient[], currentFilename));
           } else {
-            setImportResults(importRecipes(results.data as CsvRecipe[]));
+            setImportResults(importRecipes(results.data as CsvRecipe[], currentFilename));
           }
           setCsvFile(null); 
           const fileInput = document.getElementById('csvFile') as HTMLInputElement | null;
@@ -385,32 +392,71 @@ export default function DataManagementPage(): React.ReactElement {
     downloadCSV(csvString, 'nutriplanner_receitas.csv');
   };
 
+  const filteredIngredients = ingredients.filter(ing => 
+    ing.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase())
+  );
+
+  const confirmDeleteAllIngredients = () => {
+    deleteAllIngredients();
+    setShowDeleteAllIngredientsModal(false);
+  };
+
+  const confirmDeleteBatch = () => {
+    if (batchToDelete) {
+      deleteImportBatch(batchToDelete.id);
+    }
+    setShowDeleteBatchModal(false);
+    setBatchToDelete(null);
+  };
+
+  const openDeleteBatchModal = (batch: ImportBatch) => {
+    setBatchToDelete(batch);
+    setShowDeleteBatchModal(true);
+  };
+
 
   const renderActiveView = () => {
     switch (activeView) {
       case 'ingredients':
         return (
           <div>
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
-              <h2 className="text-2xl font-semibold text-gray-700">Ingredientes Cadastrados</h2>
-              <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+              <h2 className="text-2xl font-semibold text-gray-700">Ingredientes Cadastrados ({filteredIngredients.length})</h2>
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
                 <Button onClick={() => updateView('addIngredient')} leftIcon={<IconPlus />}>Novo Ingrediente</Button>
                 <Button onClick={handleExportIngredients} leftIcon={<IconDownload />} variant="ghost">Exportar CSV</Button>
+                <Button onClick={() => setShowDeleteAllIngredientsModal(true)} leftIcon={<IconTrash />} variant="danger">Excluir Todos</Button>
               </div>
             </div>
-            {ingredients.length === 0 ? <p className="text-gray-500">Nenhum ingrediente cadastrado.</p> : (
+             <div className="mb-4">
+                <label htmlFor="ingredientSearch" className="sr-only">Buscar Ingredientes</label>
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <IconSearch />
+                    </div>
+                    <input
+                        type="search"
+                        id="ingredientSearch"
+                        placeholder="Buscar ingrediente pelo nome..."
+                        value={ingredientSearchTerm}
+                        onChange={(e) => setIngredientSearchTerm(e.target.value)}
+                        className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                </div>
+            </div>
+            {filteredIngredients.length === 0 ? <p className="text-gray-500">{ingredients.length > 0 ? 'Nenhum ingrediente encontrado com o termo buscado.' : 'Nenhum ingrediente cadastrado.'}</p> : (
               <ul className="space-y-3">
-                {ingredients.map(ing => (
+                {filteredIngredients.map(ing => (
                   <li key={ing.id} className="p-4 bg-white shadow rounded-lg flex justify-between items-center">
                     <div>
                       <p className="font-medium text-emerald-600">{ing.name} <span className="text-sm text-gray-500">({ing.unit})</span></p>
                       <p className="text-xs text-gray-600">
-                        E: {ing.Energia}Kcal, P: {ing.Proteína}g, C: {ing.Carboidrato}g, L: {ing.Lipídeos}g, Col: {ing.Colesterol}mg, FA: {ing.FibraAlimentar}g
+                        E: {ing.Energia.toFixed(0)}Kcal, P: {ing.Proteína.toFixed(1)}g, C: {ing.Carboidrato.toFixed(1)}g, L: {ing.Lipídeos.toFixed(1)}g, Col: {ing.Colesterol.toFixed(0)}mg, FA: {ing.FibraAlimentar.toFixed(1)}g
                       </p>
                     </div>
                     <div className="flex space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => updateView('editIngredient', { editIngredient: ing.id })}><IconEdit /></Button>
-                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${ing.name}"?`)) deleteIngredient(ing.id); }}><IconTrash /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => updateView('editIngredient', { editIngredient: ing.id })} aria-label={`Editar ${ing.name}`}><IconEdit /></Button>
+                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${ing.name}"? Esta ação não pode ser desfeita.`)) deleteIngredient(ing.id); }} aria-label={`Excluir ${ing.name}`}><IconTrash /></Button>
                     </div>
                   </li>
                 ))}
@@ -422,7 +468,7 @@ export default function DataManagementPage(): React.ReactElement {
         return (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
-              <h2 className="text-2xl font-semibold text-gray-700">Receitas Cadastradas</h2>
+              <h2 className="text-2xl font-semibold text-gray-700">Receitas Cadastradas ({recipes.length})</h2>
                <div className="flex space-x-2">
                 <Button onClick={() => updateView('addRecipe')} leftIcon={<IconPlus />}>Nova Receita</Button>
                 <Button onClick={handleExportRecipes} leftIcon={<IconDownload />} variant="ghost">Exportar CSV</Button>
@@ -439,8 +485,8 @@ export default function DataManagementPage(): React.ReactElement {
                       </p>
                     </div>
                      <div className="flex space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => updateView('editRecipe', { editRecipe: rec.id })}><IconEdit /></Button>
-                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${rec.name}"?`)) deleteRecipeData(rec.id); }}><IconTrash /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => updateView('editRecipe', { editRecipe: rec.id })} aria-label={`Editar ${rec.name}`}><IconEdit /></Button>
+                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${rec.name}"? Esta ação não pode ser desfeita.`)) deleteRecipeData(rec.id); }} aria-label={`Excluir ${rec.name}`}><IconTrash /></Button>
                     </div>
                   </li>
                 ))}
@@ -458,52 +504,91 @@ export default function DataManagementPage(): React.ReactElement {
         return editingRecipe ? <RecipeForm initialRecipe={editingRecipe} availableIngredients={ingredients} onSubmit={(data) => { updateRecipe(data as Recipe); updateView('recipes');}} onCancel={() => updateView('recipes')} /> : <p>Carregando receita...</p>;
       case 'import':
         return (
-          <div className="space-y-6 bg-white p-6 rounded-lg shadow">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Importar Dados de CSV</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700">Arquivo CSV</label>
-                <input type="file" id="csvFile" accept=".csv" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
-              </div>
-              <div>
-                <label htmlFor="importType" className="block text-sm font-medium text-gray-700">Tipo de Dado</label>
-                <select id="importType" value={importType} onChange={(e) => setImportType(e.target.value as any)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-white">
-                  <option value="ingredients">Ingredientes</option>
-                  <option value="recipes">Receitas</option>
-                </select>
-              </div>
-            </div>
-             <div className="flex space-x-3">
-                <Button onClick={handleImport} disabled={!csvFile} leftIcon={<IconUpload />}>Importar Arquivo</Button>
-                <Button onClick={handlePreviewCsv} disabled={!csvFile} variant="ghost">Pré-visualizar CSV</Button>
-            </div>
-            {importResults && (
-              <div className={`mt-4 p-4 rounded-md ${importResults.errors.length > 0 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                <p className="font-semibold">Resultado da Importação:</p>
-                <p>Sucesso: {importResults.successCount} item(s) importado(s).</p>
-                {importResults.errors.length > 0 && (
-                  <div>
-                    <p>Erros ({importResults.errors.length}):</p>
-                    <ul className="list-disc list-inside text-sm max-h-40 overflow-y-auto">
-                      {importResults.errors.map((err, i) => <li key={i}>{err}</li>)}
-                    </ul>
-                  </div>
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Importar Dados de CSV</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div>
+                    <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700">Arquivo CSV</label>
+                    <input type="file" id="csvFile" accept=".csv" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
+                </div>
+                <div>
+                    <label htmlFor="importType" className="block text-sm font-medium text-gray-700">Tipo de Dado</label>
+                    <select id="importType" value={importType} onChange={(e) => setImportType(e.target.value as any)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-white">
+                    <option value="ingredients">Ingredientes</option>
+                    <option value="recipes">Receitas</option>
+                    </select>
+                </div>
+                </div>
+                <div className="flex space-x-3 mt-4">
+                    <Button onClick={handleImport} disabled={!csvFile} leftIcon={<IconUpload />}>Importar Arquivo</Button>
+                    <Button onClick={handlePreviewCsv} disabled={!csvFile} variant="ghost">Pré-visualizar CSV</Button>
+                </div>
+                {importResults && (
+                <div className={`mt-4 p-4 rounded-md ${importResults.errors.length > 0 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                    <p className="font-semibold">Resultado da Importação:</p>
+                    <p>Sucesso: {importResults.successCount} item(s) importado(s).</p>
+                    {importResults.errors.length > 0 && (
+                    <div>
+                        <p>Erros ({importResults.errors.length}):</p>
+                        <ul className="list-disc list-inside text-sm max-h-40 overflow-y-auto">
+                        {importResults.errors.map((err, i) => <li key={i}>{err}</li>)}
+                        </ul>
+                    </div>
+                    )}
+                    {importResults.newIngredients && importResults.newIngredients.length > 0 && (
+                    <div className="mt-2">
+                        <p className="font-semibold">Novos Ingredientes Criados (com valores padrão, por favor revise):</p>
+                        <ul className="list-disc list-inside text-sm">
+                        {importResults.newIngredients.map((name, i) => <li key={i}>{name}</li>)}
+                        </ul>
+                    </div>
+                    )}
+                </div>
                 )}
-                 {importResults.newIngredients && importResults.newIngredients.length > 0 && (
-                  <div className="mt-2">
-                    <p className="font-semibold">Novos Ingredientes Criados (com valores padrão, por favor revise):</p>
-                    <ul className="list-disc list-inside text-sm">
-                      {importResults.newIngredients.map((name, i) => <li key={i}>{name}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="text-sm text-gray-600 space-y-2">
-                <p><strong>Formato CSV Ingredientes:</strong> Cabeçalho: <code>{CSV_INGREDIENT_HEADERS.join(',')}</code></p>
-                <p className="text-xs">Ex: nome,unidade,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g</p>
-                <p><strong>Formato CSV Receitas:</strong> Cabeçalho: <code>{CSV_RECIPE_HEADERS.join(',')}</code>. Ingredientes no formato "NomeIng1:Qtd1;NomeIng2:Qtd2".</p>
-                <p className="text-xs">Ex: nome,modo_preparo,"IngredienteA:100;IngredienteB:2",porcoes</p>
+                <div className="text-sm text-gray-600 space-y-2 mt-4">
+                    <p><strong>Formato CSV Ingredientes:</strong> Cabeçalho: <code>{CSV_INGREDIENT_HEADERS.join(',')}</code></p>
+                    <p className="text-xs">Ex: nome,unidade,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g</p>
+                    <p><strong>Formato CSV Receitas:</strong> Cabeçalho: <code>{CSV_RECIPE_HEADERS.join(',')}</code>. Ingredientes no formato "NomeIng1:Qtd1;NomeIng2:Qtd2".</p>
+                    <p className="text-xs">Ex: nome,modo_preparo,"IngredienteA:100;IngredienteB:2",porcoes</p>
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Histórico de Importações ({importBatches.length})</h2>
+                 {importBatches.length === 0 ? <p className="text-gray-500">Nenhum arquivo importado anteriormente.</p> : (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Arquivo</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Itens</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {importBatches.slice().reverse().map(batch => ( // Show newest first
+                                    <tr key={batch.id}>
+                                        <td className="px-3 py-2 whitespace-nowrap truncate max-w-xs" title={batch.filename}>{batch.filename}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap">{new Date(batch.date).toLocaleDateString('pt-BR')}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap">{batch.type === 'ingredients' ? 'Ingredientes' : 'Receitas'}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap">{batch.successCount}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${batch.errorCount > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                                                {batch.errorCount > 0 ? `Completo com ${batch.errorCount} erros` : 'Completo'}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2 whitespace-nowrap">
+                                            <Button variant="danger" size="sm" onClick={() => openDeleteBatchModal(batch)} aria-label={`Excluir lote ${batch.filename}`}>Excluir Lote</Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                 )}
             </div>
           </div>
         );
@@ -563,6 +648,34 @@ export default function DataManagementPage(): React.ReactElement {
         ) : <p>Nenhum dado para pré-visualizar ou formato de CSV inválido.</p>}
          <div className="mt-4 text-right">
             <Button onClick={() => setShowPreviewModal(false)}>Fechar</Button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={showDeleteAllIngredientsModal}
+        onClose={() => setShowDeleteAllIngredientsModal(false)}
+        title="Confirmar Exclusão Total de Ingredientes"
+      >
+        <p>Tem certeza que deseja excluir TODOS os ingredientes? Esta ação é irreversível e removerá todos os ingredientes do sistema. Isso pode afetar receitas e planos de refeições existentes.</p>
+        <div className="mt-6 flex justify-end space-x-3">
+          <Button variant="ghost" onClick={() => setShowDeleteAllIngredientsModal(false)}>Cancelar</Button>
+          <Button variant="danger" onClick={confirmDeleteAllIngredients}>Excluir Tudo</Button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={showDeleteBatchModal}
+        onClose={() => { setShowDeleteBatchModal(false); setBatchToDelete(null); }}
+        title="Confirmar Exclusão do Lote de Importação"
+      >
+        {batchToDelete && (
+            <p>
+                Tem certeza que deseja excluir o lote de importação do arquivo "<strong>{batchToDelete.filename}</strong>"?
+                Todos os <strong>{batchToDelete.successCount} {batchToDelete.type === 'ingredients' ? 'ingredientes' : 'receitas'}</strong>
+                {' '}importados neste lote serão removidos. Esta ação é irreversível e pode afetar receitas ou planos de refeição que utilizam estes itens.
+            </p>
+        )}
+        <div className="mt-6 flex justify-end space-x-3">
+          <Button variant="ghost" onClick={() => { setShowDeleteBatchModal(false); setBatchToDelete(null); }}>Cancelar</Button>
+          <Button variant="danger" onClick={confirmDeleteBatch}>Excluir Lote</Button>
         </div>
       </Modal>
     </div>

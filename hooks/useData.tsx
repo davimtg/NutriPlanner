@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Ingredient, Recipe, DailyPlan, MealType, PlannedItem, ShoppingListItem, DataContextType, CsvIngredient, CsvRecipe, RecipeIngredient, NutrientInfo } from '../types';
+import { Ingredient, Recipe, DailyPlan, MealType, PlannedItem, ShoppingListItem, DataContextType, CsvIngredient, CsvRecipe, RecipeIngredient, NutrientInfo, ImportBatch } from '../types';
 import { generateId } from '../utils/idGenerator';
 import { calculateRecipeNutrients, calculateMealNutrients, calculateDailyPlanNutrients } from '../utils/nutritionCalculator';
 import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL } from '../constants';
@@ -39,6 +38,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localData ? JSON.parse(localData) : [];
   });
 
+  const [importBatches, setImportBatches] = useState<ImportBatch[]>(() => {
+    const localData = localStorage.getItem('nutriplanner_importBatches');
+    return localData ? JSON.parse(localData) : [];
+  });
+
+
   useEffect(() => {
     localStorage.setItem('nutriplanner_ingredients', JSON.stringify(ingredients));
   }, [ingredients]);
@@ -50,6 +55,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('nutriplanner_mealPlan', JSON.stringify(mealPlan));
   }, [mealPlan]);
+
+  useEffect(() => {
+    localStorage.setItem('nutriplanner_importBatches', JSON.stringify(importBatches));
+  }, [importBatches]);
+
 
   const getIngredientById = useCallback((id: string) => ingredients.find(ing => ing.id === id), [ingredients]);
   
@@ -68,6 +78,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteIngredient = useCallback((id: string) => {
     setIngredients(prev => prev.filter(ing => ing.id !== id));
   }, []);
+  
+  const deleteAllIngredients = useCallback(() => {
+    setIngredients([]);
+  }, []);
+
 
   const addRecipe = useCallback((recipeData: Omit<Recipe, 'id' | keyof NutrientInfo | 'totalNutrients'>): Recipe => {
     const totalNutrients = calculateRecipeNutrients(recipeData.ingredients, getIngredientById);
@@ -256,17 +271,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Object.values(consolidated);
   }, [mealPlan, getIngredientById, getRecipeById]);
 
-  const importIngredients = useCallback((ingredientsData: CsvIngredient[]): { successCount: number; errors: string[] } => {
-    let successCount = 0;
-    const errors: string[] = [];
-    const newIngredients: Ingredient[] = [];
+  const importIngredients = useCallback((ingredientsData: CsvIngredient[], filename: string): { successCount: number; errors: string[] } => {
+    let currentSuccessCount = 0;
+    const currentErrors: string[] = [];
+    const newIngredientsForState: Ingredient[] = [];
+    const successfullyImportedIds: string[] = [];
 
     ingredientsData.forEach((csvIng, index) => {
       if (!csvIng.nome || !csvIng.unidade) {
-        errors.push(`Linha ${index + 2}: Nome e Unidade são obrigatórios.`);
+        currentErrors.push(`Linha ${index + 2}: Nome e Unidade são obrigatórios.`);
         return;
       }
       try {
+        const newId = generateId();
         const ingredient: Omit<Ingredient, 'id'> = {
           name: csvIng.nome.trim(),
           unit: csvIng.unidade.trim(),
@@ -277,69 +294,90 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           Colesterol: parseFloat(csvIng.colesterol_mg) || 0,
           FibraAlimentar: parseFloat(csvIng.fibra_alimentar_g) || 0,
         };
-        newIngredients.push({ ...DEFAULT_NUTRIENT_INFO, ...ingredient, id: generateId() });
-        successCount++;
+        newIngredientsForState.push({ ...DEFAULT_NUTRIENT_INFO, ...ingredient, id: newId });
+        successfullyImportedIds.push(newId);
+        currentSuccessCount++;
       } catch (e) {
-        errors.push(`Linha ${index + 2}: Erro ao processar dados - ${(e as Error).message}`);
+        currentErrors.push(`Linha ${index + 2}: Erro ao processar dados - ${(e as Error).message}`);
       }
     });
 
-    setIngredients(prev => [...prev, ...newIngredients]);
-    return { successCount, errors };
+    setIngredients(prev => [...prev, ...newIngredientsForState]);
+    
+    const newBatch: ImportBatch = {
+      id: generateId(),
+      filename,
+      date: new Date().toISOString(),
+      type: 'ingredients',
+      successCount: currentSuccessCount,
+      errorCount: currentErrors.length,
+      importedItemIds: successfullyImportedIds,
+      errors: currentErrors.length > 0 ? currentErrors : undefined,
+    };
+    setImportBatches(prev => [...prev, newBatch]);
+
+    return { successCount: currentSuccessCount, errors: currentErrors };
   }, []);
   
-  const importRecipes = useCallback((recipesData: CsvRecipe[]): { successCount: number; errors: string[]; newIngredients: string[] } => {
-    let successCount = 0;
-    const errors: string[] = [];
-    const newRecipesInternal: Recipe[] = [];
-    const createdIngredientNames: string[] = [];
+  const importRecipes = useCallback((recipesData: CsvRecipe[], filename: string): { successCount: number; errors: string[]; newIngredients: string[] } => {
+    let currentSuccessCount = 0;
+    const currentErrors: string[] = [];
+    const newRecipesForState: Recipe[] = [];
+    const createdIngredientNamesForBatch: string[] = [];
+    const successfullyImportedRecipeIds: string[] = [];
 
     recipesData.forEach((csvRec, index) => {
       if (!csvRec.nome || !csvRec.ingredientes || !csvRec.porcoes) {
-        errors.push(`Linha ${index + 2}: Nome, Ingredientes e Porções são obrigatórios.`);
+        currentErrors.push(`Linha ${index + 2}: Nome, Ingredientes e Porções são obrigatórios.`);
         return;
       }
       try {
         const recipeIngredients: RecipeIngredient[] = [];
         const ingredientStrings = csvRec.ingredientes.split(';').map(s => s.trim()).filter(s => s);
+        let ingredientParsingError = false;
         
         for (const ingStr of ingredientStrings) {
           const parts = ingStr.split(':');
           if (parts.length !== 2) {
-            errors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Formato de ingrediente inválido '${ingStr}'. Use 'NomeIngrediente:Quantidade'.`);
+            currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Formato de ingrediente inválido '${ingStr}'. Use 'NomeIngrediente:Quantidade'.`);
+            ingredientParsingError = true;
             continue;
           }
           const ingName = parts[0].trim();
           const quantity = parseFloat(parts[1].replace(/[^\d.-]/g, ''));
           
           if (isNaN(quantity)) {
-             errors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Quantidade inválida para '${ingName}'.`);
+             currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Quantidade inválida para '${ingName}'.`);
+             ingredientParsingError = true;
              continue;
           }
 
           let ingredient = ingredients.find(i => i.name.toLowerCase() === ingName.toLowerCase());
           if (!ingredient) {
-            ingredient = addIngredient({
+            // Note: addIngredient updates state, which might be slightly delayed for the current batch processing.
+            // For immediate use in this batch, we rely on the returned ingredient.
+            // However, for simplicity in batch creation, we'll add to `createdIngredientNamesForBatch`
+            // and the main `ingredients` state will be updated by `addIngredient`.
+            const newTempIng = addIngredient({ // This will also update the main ingredients state
               name: ingName,
               unit: 'unidade', 
               ...DEFAULT_NUTRIENT_INFO 
             });
-            createdIngredientNames.push(ingName);
+            ingredient = newTempIng; // Use the newly created ingredient for this recipe
+            createdIngredientNamesForBatch.push(ingName);
           }
           recipeIngredients.push({ ingredientId: ingredient.id, quantity });
         }
 
-        if (errors.length > 0 && errors.some(e => e.startsWith(`Linha ${index + 2}`))) {
-            return;
-        }
+        if (ingredientParsingError) return; // Skip this recipe if there were errors parsing its ingredients
 
         const servings = parseInt(csvRec.porcoes, 10);
         if (isNaN(servings) || servings <= 0) {
-          errors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Número de porções inválido.`);
+          currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Número de porções inválido.`);
           return;
         }
 
-        const totalNutrients = calculateRecipeNutrients(recipeIngredients, getIngredientById);
+        const totalNutrients = calculateRecipeNutrients(recipeIngredients, getIngredientById); // Use getIngredientById to ensure fresh data
         const nutrientsPerServing: NutrientInfo = servings > 0 ? {
             Energia: totalNutrients.Energia / servings,
             Proteína: totalNutrients.Proteína / servings,
@@ -348,37 +386,65 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             Colesterol: totalNutrients.Colesterol / servings,
             FibraAlimentar: totalNutrients.FibraAlimentar / servings,
         } : { ...DEFAULT_NUTRIENT_INFO };
-
+        
+        const newRecipeId = generateId();
         const newRecipe: Recipe = {
-          id: generateId(),
+          id: newRecipeId,
           name: csvRec.nome.trim(),
           instructions: csvRec.modo_preparo.trim(),
           servings: servings,
           ingredients: recipeIngredients,
-          imageUrl: `${PLACEHOLDER_IMAGE_URL}?id=${generateId()}`,
+          imageUrl: `${PLACEHOLDER_IMAGE_URL}?id=${newRecipeId}`,
           ...nutrientsPerServing,
           totalNutrients: totalNutrients
         };
-        newRecipesInternal.push(newRecipe);
-        successCount++;
+        newRecipesForState.push(newRecipe);
+        successfullyImportedRecipeIds.push(newRecipeId);
+        currentSuccessCount++;
       } catch (e) {
-        errors.push(`Linha ${index + 2}: Erro ao processar receita '${csvRec.nome}' - ${(e as Error).message}`);
+        currentErrors.push(`Linha ${index + 2}: Erro ao processar receita '${csvRec.nome}' - ${(e as Error).message}`);
       }
     });
 
-    setRecipes(prev => [...prev, ...newRecipesInternal]);
-    return { successCount, errors, newIngredients: [...new Set(createdIngredientNames)] };
+    setRecipes(prev => [...prev, ...newRecipesForState]);
+
+    const newBatch: ImportBatch = {
+      id: generateId(),
+      filename,
+      date: new Date().toISOString(),
+      type: 'recipes',
+      successCount: currentSuccessCount,
+      errorCount: currentErrors.length,
+      importedItemIds: successfullyImportedRecipeIds,
+      errors: currentErrors.length > 0 ? currentErrors : undefined,
+    };
+    setImportBatches(prev => [...prev, newBatch]);
+
+    return { successCount: currentSuccessCount, errors: currentErrors, newIngredients: [...new Set(createdIngredientNamesForBatch)] };
   }, [ingredients, addIngredient, getIngredientById]);
+
+
+  const deleteImportBatch = useCallback((batchId: string) => {
+    const batchToDelete = importBatches.find(b => b.id === batchId);
+    if (!batchToDelete) return;
+
+    if (batchToDelete.type === 'ingredients') {
+      setIngredients(prevIngs => prevIngs.filter(ing => !batchToDelete.importedItemIds.includes(ing.id)));
+    } else if (batchToDelete.type === 'recipes') {
+      setRecipes(prevRecs => prevRecs.filter(rec => !batchToDelete.importedItemIds.includes(rec.id)));
+    }
+    setImportBatches(prevBatches => prevBatches.filter(b => b.id !== batchId));
+  }, [importBatches]);
 
 
   return (
     <DataContext.Provider value={{ 
-        ingredients, recipes, mealPlan, 
-        addIngredient, updateIngredient, deleteIngredient, getIngredientById,
+        ingredients, recipes, mealPlan, importBatches,
+        addIngredient, updateIngredient, deleteIngredient, deleteAllIngredients, getIngredientById,
         addRecipe, updateRecipe, deleteRecipe, getRecipeById,
         getDailyPlan, updateDailyPlan, addItemToMeal, removeItemFromMeal, updateItemInMeal,
         getShoppingList,
-        importIngredients, importRecipes
+        importIngredients, importRecipes, deleteImportBatch
     }}>
       {children}
     </DataContext.Provider>

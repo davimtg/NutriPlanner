@@ -1,4 +1,3 @@
-
 export interface NutrientInfo {
   Energia: number; // Kcal
   Proteína: number; // g
@@ -83,13 +82,26 @@ export interface CsvRecipe {
   porcoes: string; // Parsed as number later
 }
 
+export interface ImportBatch {
+  id: string;
+  filename: string;
+  date: string; // ISO string
+  type: 'ingredients' | 'recipes';
+  successCount: number;
+  errorCount: number;
+  importedItemIds: string[]; // IDs of ingredients/recipes created in this batch
+  errors?: string[]; // Store import errors for this batch
+}
+
 export interface DataContextType {
   ingredients: Ingredient[];
   recipes: Recipe[];
   mealPlan: DailyPlan[];
+  importBatches: ImportBatch[];
   addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Ingredient;
   updateIngredient: (ingredient: Ingredient) => void;
   deleteIngredient: (id: string) => void;
+  deleteAllIngredients: () => void;
   getIngredientById: (id: string) => Ingredient | undefined;
   addRecipe: (recipe: Omit<Recipe, 'id' | keyof NutrientInfo>) => Recipe;
   updateRecipe: (recipe: Recipe) => void;
@@ -101,6 +113,7 @@ export interface DataContextType {
   removeItemFromMeal: (date: string, mealType: MealType, itemId: string) => void;
   updateItemInMeal: (date: string, mealType: MealType, item: PlannedItem) => void;
   getShoppingList: (startDate: string, endDate: string) => ShoppingListItem[];
-  importIngredients: (ingredientsData: CsvIngredient[]) => { successCount: number; errors: string[] };
-  importRecipes: (recipesData: CsvRecipe[]) => { successCount: number; errors: string[]; newIngredients: string[] };
+  importIngredients: (ingredientsData: CsvIngredient[], filename: string) => { successCount: number; errors: string[] };
+  importRecipes: (recipesData: CsvRecipe[], filename: string) => { successCount: number; errors: string[]; newIngredients: string[] };
+  deleteImportBatch: (batchId: string) => void;
 }
