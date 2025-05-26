@@ -5,9 +5,8 @@ import { Ingredient, Recipe, RecipeIngredient, CsvIngredient, CsvRecipe, Nutrien
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { UNITS_OF_MEASUREMENT, CSV_INGREDIENT_HEADERS, CSV_RECIPE_HEADERS, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL } from '../constants';
-import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch } from '../components/Icon';
+import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch, IconBook } from '../components/Icon';
 import Papa from 'papaparse';
-
 
 interface IngredientFormProps {
   initialIngredient?: Ingredient;
@@ -29,6 +28,15 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
     initialIngredient || { name: '', unit: 'g', ...DEFAULT_NUTRIENT_INFO }
   );
 
+  useEffect(() => {
+    if (initialIngredient) {
+        setIngredient(initialIngredient);
+    } else {
+        setIngredient({ name: '', unit: 'g', ...DEFAULT_NUTRIENT_INFO });
+    }
+  }, [initialIngredient]);
+
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     const isNutrientField = nutrientFormFields.some(field => field.key === name);
@@ -45,8 +53,8 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
         return;
     }
     const fullIngredientData: Omit<Ingredient, 'id'> | Ingredient = {
-        ...DEFAULT_NUTRIENT_INFO, // Ensure all nutrient fields are present
-        ...ingredient, // Spread current form state
+        ...DEFAULT_NUTRIENT_INFO, 
+        ...ingredient, 
     };
     if (initialIngredient && 'id' in initialIngredient) {
         (fullIngredientData as Ingredient).id = initialIngredient.id;
@@ -221,7 +229,10 @@ export default function DataManagementPage(): React.ReactElement {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [activeView, setActiveView] = useState<'ingredients' | 'recipes' | 'import' | 'addIngredient' | 'addRecipe' | 'editIngredient' | 'editRecipe'>('ingredients');
+  const TABS = ['ingredients', 'recipes', 'import'] as const;
+  type ActiveViewType = typeof TABS[number] | 'addIngredient' | 'addRecipe' | 'editIngredient' | 'editRecipe';
+  
+  const [activeView, setActiveView] = useState<ActiveViewType>('ingredients');
   
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | undefined>(undefined);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
@@ -230,7 +241,6 @@ export default function DataManagementPage(): React.ReactElement {
   const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState<ImportBatch | null>(null);
 
-
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<'ingredients' | 'recipes'>('ingredients');
   const [importResults, setImportResults] = useState<{ successCount: number; errors: string[]; newIngredients?: string[] } | null>(null);
@@ -238,7 +248,7 @@ export default function DataManagementPage(): React.ReactElement {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   
   useEffect(() => {
-    const viewParam = searchParams.get('view');
+    const viewParam = searchParams.get('view') as ActiveViewType | null;
     const editIngredientId = searchParams.get('editIngredient');
     const editRecipeId = searchParams.get('editRecipe');
 
@@ -248,7 +258,7 @@ export default function DataManagementPage(): React.ReactElement {
         setEditingIngredient(ing);
         setActiveView('editIngredient');
       } else {
-        navigate('/manage-data?view=ingredients'); 
+        updateView('ingredients'); 
       }
     } else if (editRecipeId) {
       const rec = getRecipeById(editRecipeId);
@@ -256,16 +266,19 @@ export default function DataManagementPage(): React.ReactElement {
         setEditingRecipe(rec);
         setActiveView('editRecipe');
       } else {
-        navigate('/manage-data?view=recipes'); 
+        updateView('recipes');
       }
-    } else if (viewParam) {
-      setActiveView(viewParam as any);
-    } else if (!activeView.startsWith('edit')) { // Preserve edit views if no params change
-        setActiveView('ingredients');
+    } else if (viewParam && TABS.includes(viewParam as any)) {
+      setActiveView(viewParam);
+    } else if (viewParam && (viewParam === 'addIngredient' || viewParam === 'addRecipe')) {
+      setActiveView(viewParam);
+    } else if (!activeView.startsWith('edit') && !TABS.includes(activeView as any) && activeView !== 'addIngredient' && activeView !== 'addRecipe') {
+        updateView('ingredients');
     }
-  }, [searchParams, getIngredientById, getRecipeById, navigate, activeView]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, getIngredientById, getRecipeById]);
 
-  const updateView = (view: string, params?: Record<string, string>) => {
+  const updateView = (view: ActiveViewType, params?: Record<string, string>) => {
     const newParams = new URLSearchParams(); 
     newParams.set('view', view);
     if (params) {
@@ -274,7 +287,7 @@ export default function DataManagementPage(): React.ReactElement {
         }
     }
     setSearchParams(newParams);
-    // setActiveView will be updated by useEffect based on searchParams
+    setActiveView(view); // Also directly set active view to avoid lag from useEffect
   };
 
 
@@ -316,7 +329,7 @@ export default function DataManagementPage(): React.ReactElement {
       alert("Por favor, selecione um arquivo CSV.");
       return;
     }
-    const currentFilename = csvFile.name; // Store filename before it's cleared
+    const currentFilename = csvFile.name; 
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
@@ -348,7 +361,7 @@ export default function DataManagementPage(): React.ReactElement {
   };
 
   const downloadCSV = (csvString: string, filename: string) => {
-    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); 
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -394,7 +407,7 @@ export default function DataManagementPage(): React.ReactElement {
 
   const filteredIngredients = ingredients.filter(ing => 
     ing.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase())
-  );
+  ).sort((a,b) => a.name.localeCompare(b.name));
 
   const confirmDeleteAllIngredients = () => {
     deleteAllIngredients();
@@ -413,7 +426,6 @@ export default function DataManagementPage(): React.ReactElement {
     setBatchToDelete(batch);
     setShowDeleteBatchModal(true);
   };
-
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -465,18 +477,19 @@ export default function DataManagementPage(): React.ReactElement {
           </div>
         );
       case 'recipes':
+        const sortedRecipes = [...recipes].sort((a, b) => a.name.localeCompare(b.name));
         return (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
-              <h2 className="text-2xl font-semibold text-gray-700">Receitas Cadastradas ({recipes.length})</h2>
+              <h2 className="text-2xl font-semibold text-gray-700">Receitas Cadastradas ({sortedRecipes.length})</h2>
                <div className="flex space-x-2">
                 <Button onClick={() => updateView('addRecipe')} leftIcon={<IconPlus />}>Nova Receita</Button>
                 <Button onClick={handleExportRecipes} leftIcon={<IconDownload />} variant="ghost">Exportar CSV</Button>
               </div>
             </div>
-            {recipes.length === 0 ? <p className="text-gray-500">Nenhuma receita cadastrada.</p> : (
+            {sortedRecipes.length === 0 ? <p className="text-gray-500">Nenhuma receita cadastrada.</p> : (
               <ul className="space-y-3">
-                {recipes.map(rec => (
+                {sortedRecipes.map(rec => (
                   <li key={rec.id} className="p-4 bg-white shadow rounded-lg flex justify-between items-center">
                     <div>
                       <p className="font-medium text-emerald-600">{rec.name} <span className="text-sm text-gray-500">(Porções: {rec.servings})</span></p>
@@ -569,7 +582,7 @@ export default function DataManagementPage(): React.ReactElement {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {importBatches.slice().reverse().map(batch => ( // Show newest first
+                                {importBatches.slice().reverse().map(batch => ( 
                                     <tr key={batch.id}>
                                         <td className="px-3 py-2 whitespace-nowrap truncate max-w-xs" title={batch.filename}>{batch.filename}</td>
                                         <td className="px-3 py-2 whitespace-nowrap">{new Date(batch.date).toLocaleDateString('pt-BR')}</td>
@@ -604,13 +617,13 @@ export default function DataManagementPage(): React.ReactElement {
         <p className="text-lg text-gray-600 mt-1">Adicione, edite ou importe seus ingredientes e receitas.</p>
       </header>
       
-      <nav className="flex space-x-1 border-b border-gray-200" aria-label="Tabs">
-        {(['ingredients', 'recipes', 'import'] as const).map((tab) => (
+      <nav className="flex flex-wrap space-x-1 border-b border-gray-200" aria-label="Tabs">
+        {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => updateView(tab)}
-            className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors
-              ${activeView.startsWith(tab) ? 'bg-emerald-500 text-white' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50'}
+            className={`px-4 py-2 font-medium text-sm rounded-t-lg transition-colors whitespace-nowrap mb-[-1px]
+              ${activeView.startsWith(tab) ? 'bg-emerald-500 text-white border border-emerald-500 border-b-white' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 border border-transparent'}
             `}
             aria-current={activeView.startsWith(tab) ? 'page' : undefined}
           >

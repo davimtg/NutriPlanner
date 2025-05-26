@@ -31,6 +31,8 @@ export const UNITS_OF_MEASUREMENT = [
   { value: 'fatia', label: 'Fatia(s)' },
   { value: 'pedaço', label: 'Pedaço(s)' },
   { value: 'a gosto', label: 'A gosto' },
+  { value: '100g', label: '100 Gramas (100g)'},
+  { value: '100ml', label: '100 Mililitros (100ml)'},
 ];
 
 export const CSV_INGREDIENT_HEADERS = ['nome', 'unidade', 'energia_kcal', 'proteina_g', 'carboidrato_g', 'lipideos_g', 'colesterol_mg', 'fibra_alimentar_g'];
