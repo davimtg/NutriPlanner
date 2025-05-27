@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p dist && cp index.html dist/index.html && esbuild index.tsx --bundle --outfile=dist/index.js --format=esm --jsx=automatic --loader:.tsx=tsx --minify --external:react --external:react-dom/* --external:react/* --external:react-router-dom --external:papaparse --define:process.env.API_KEY=\\\"\"$API_KEY\"\\\""
+    "build": "mkdir -p dist && cp index.html dist/index.html && esbuild index.tsx --bundle --outfile=dist/index.js --format=esm --jsx=automatic --loader:.tsx=tsx --minify --external:react --external:react-dom/* --external:react/* --external:react-router-dom --external:papaparse --external:@google/genai --define:process.env.API_KEY=\\\"\"$API_KEY\"\\\""
   },
   "devDependencies": {
     "esbuild": "^0.20.0"
