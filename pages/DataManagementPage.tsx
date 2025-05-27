@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { Ingredient, Recipe, RecipeIngredient, CsvIngredient, CsvRecipe, NutrientInfo, ImportBatch } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { UNITS_OF_MEASUREMENT, CSV_INGREDIENT_HEADERS, CSV_RECIPE_HEADERS, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL } from '../constants';
-import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch, IconBook } from '../components/Icon';
+import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch, IconBook, IconFilter } from '../components/Icon';
 import Papa from 'papaparse';
 
 interface IngredientFormProps {
@@ -24,15 +24,15 @@ const nutrientFormFields: { key: keyof NutrientInfo; label: string; unit: string
 ];
 
 const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSubmit, onCancel }) => {
-  const [ingredient, setIngredient] = useState<Omit<Ingredient, 'id' | keyof NutrientInfo> & Partial<NutrientInfo>>(
-    initialIngredient || { name: '', unit: 'g', ...DEFAULT_NUTRIENT_INFO }
+  const [ingredient, setIngredient] = useState<Omit<Ingredient, 'id' | keyof NutrientInfo> & Partial<NutrientInfo> & { setor?: string }>(
+    initialIngredient || { name: '', unit: 'g', setor: 'Outros', ...DEFAULT_NUTRIENT_INFO }
   );
 
   useEffect(() => {
     if (initialIngredient) {
-        setIngredient(initialIngredient);
+        setIngredient({...initialIngredient, setor: initialIngredient.setor || 'Outros'});
     } else {
-        setIngredient({ name: '', unit: 'g', ...DEFAULT_NUTRIENT_INFO });
+        setIngredient({ name: '', unit: 'g', setor: 'Outros', ...DEFAULT_NUTRIENT_INFO });
     }
   }, [initialIngredient]);
 
@@ -55,6 +55,7 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
     const fullIngredientData: Omit<Ingredient, 'id'> | Ingredient = {
         ...DEFAULT_NUTRIENT_INFO, 
         ...ingredient, 
+        setor: ingredient.setor || 'Outros',
     };
     if (initialIngredient && 'id' in initialIngredient) {
         (fullIngredientData as Ingredient).id = initialIngredient.id;
@@ -71,12 +72,18 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
         <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome do Ingrediente</label>
         <input type="text" name="name" id="name" value={ingredient.name} onChange={handleChange} required className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
       </div>
-      <div>
-        <label htmlFor="unit" className="block text-sm font-medium text-gray-700">Unidade de Medida</label>
-        <select name="unit" id="unit" value={ingredient.unit} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-white">
-          {UNITS_OF_MEASUREMENT.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-        </select>
-        <p className="text-xs text-gray-500 mt-1">Nutrientes devem ser informados por esta unidade (ou por 100g/100ml se aplicável).</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label htmlFor="unit" className="block text-sm font-medium text-gray-700">Unidade de Medida</label>
+            <select name="unit" id="unit" value={ingredient.unit} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-white">
+            {UNITS_OF_MEASUREMENT.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Nutrientes devem ser informados por esta unidade (ou por 100g/100ml se aplicável).</p>
+        </div>
+        <div>
+            <label htmlFor="setor" className="block text-sm font-medium text-gray-700">Setor</label>
+            <input type="text" name="setor" id="setor" value={ingredient.setor || 'Outros'} onChange={handleChange} placeholder="Ex: Hortifruti, Laticínios" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {nutrientFormFields.map(({ key, label, unit, step }) => (
@@ -219,6 +226,29 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ initialRecipe, onSubmit, onCanc
   );
 };
 
+// Simple hash function for category colors
+const getCategoryColorStyle = (category: string = "Outros") => {
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = category.charCodeAt(i) + ((hash << 5) - hash);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    const colors = [
+      'bg-green-100 text-green-800 border-green-300', 
+      'bg-blue-100 text-blue-800 border-blue-300', 
+      'bg-yellow-100 text-yellow-800 border-yellow-300', 
+      'bg-purple-100 text-purple-800 border-purple-300', 
+      'bg-pink-100 text-pink-800 border-pink-300',
+      'bg-indigo-100 text-indigo-800 border-indigo-300',
+      'bg-red-100 text-red-800 border-red-300',
+      'bg-teal-100 text-teal-800 border-teal-300',
+      'bg-orange-100 text-orange-800 border-orange-300',
+      'bg-gray-100 text-gray-800 border-gray-300'
+    ];
+    return colors[Math.abs(hash) % colors.length];
+};
+
+
 export default function DataManagementPage(): React.ReactElement {
   const { 
     ingredients, recipes, addIngredient, updateIngredient, deleteIngredient, deleteAllIngredients,
@@ -237,6 +267,9 @@ export default function DataManagementPage(): React.ReactElement {
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | undefined>(undefined);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
   const [ingredientSearchTerm, setIngredientSearchTerm] = useState('');
+  const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('');
+
+
   const [showDeleteAllIngredientsModal, setShowDeleteAllIngredientsModal] = useState(false);
   const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState<ImportBatch | null>(null);
@@ -287,7 +320,7 @@ export default function DataManagementPage(): React.ReactElement {
         }
     }
     setSearchParams(newParams);
-    setActiveView(view); // Also directly set active view to avoid lag from useEffect
+    setActiveView(view); 
   };
 
 
@@ -377,6 +410,7 @@ export default function DataManagementPage(): React.ReactElement {
     const dataToExport = ingredients.map(ing => ({
       nome: ing.name,
       unidade: ing.unit,
+      setor: ing.setor || 'Outros',
       energia_kcal: ing.Energia.toString(),
       proteina_g: ing.Proteína.toString(),
       carboidrato_g: ing.Carboidrato.toString(),
@@ -405,8 +439,15 @@ export default function DataManagementPage(): React.ReactElement {
     downloadCSV(csvString, 'nutriplanner_receitas.csv');
   };
 
+  const uniqueSectors = useMemo(() => {
+    const sectors = new Set<string>();
+    ingredients.forEach(ing => sectors.add(ing.setor || 'Outros'));
+    return Array.from(sectors).sort();
+  }, [ingredients]);
+
   const filteredIngredients = ingredients.filter(ing => 
-    ing.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase())
+    ing.name.toLowerCase().includes(ingredientSearchTerm.toLowerCase()) &&
+    (selectedSectorFilter === '' || (ing.setor || 'Outros') === selectedSectorFilter)
   ).sort((a,b) => a.name.localeCompare(b.name));
 
   const confirmDeleteAllIngredients = () => {
@@ -440,33 +481,49 @@ export default function DataManagementPage(): React.ReactElement {
                 <Button onClick={() => setShowDeleteAllIngredientsModal(true)} leftIcon={<IconTrash />} variant="danger">Excluir Todos</Button>
               </div>
             </div>
-             <div className="mb-4">
-                <label htmlFor="ingredientSearch" className="sr-only">Buscar Ingredientes</label>
-                <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <IconSearch />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label htmlFor="ingredientSearch" className="sr-only">Buscar Ingredientes</label>
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"> <IconSearch /> </div>
+                        <input
+                            type="search" id="ingredientSearch" placeholder="Buscar ingrediente pelo nome..."
+                            value={ingredientSearchTerm} onChange={(e) => setIngredientSearchTerm(e.target.value)}
+                            className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
+                        />
                     </div>
-                    <input
-                        type="search"
-                        id="ingredientSearch"
-                        placeholder="Buscar ingrediente pelo nome..."
-                        value={ingredientSearchTerm}
-                        onChange={(e) => setIngredientSearchTerm(e.target.value)}
-                        className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
-                    />
+                </div>
+                <div>
+                    <label htmlFor="sectorFilter" className="sr-only">Filtrar por Setor</label>
+                    <div className="relative">
+                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"> <IconFilter className="text-gray-400"/> </div>
+                        <select
+                            id="sectorFilter" value={selectedSectorFilter} onChange={(e) => setSelectedSectorFilter(e.target.value)}
+                            className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                        >
+                            <option value="">Todos os Setores</option>
+                            {uniqueSectors.map(sector => <option key={sector} value={sector}>{sector}</option>)}
+                        </select>
+                    </div>
                 </div>
             </div>
-            {filteredIngredients.length === 0 ? <p className="text-gray-500">{ingredients.length > 0 ? 'Nenhum ingrediente encontrado com o termo buscado.' : 'Nenhum ingrediente cadastrado.'}</p> : (
+            {filteredIngredients.length === 0 ? <p className="text-gray-500">{ingredients.length > 0 ? 'Nenhum ingrediente encontrado com os filtros aplicados.' : 'Nenhum ingrediente cadastrado.'}</p> : (
               <ul className="space-y-3">
                 {filteredIngredients.map(ing => (
-                  <li key={ing.id} className="p-4 bg-white shadow rounded-lg flex justify-between items-center">
+                  <li key={ing.id} className="p-4 bg-white shadow rounded-lg flex justify-between items-start">
                     <div>
-                      <p className="font-medium text-emerald-600">{ing.name} <span className="text-sm text-gray-500">({ing.unit})</span></p>
+                      <div className="flex items-center mb-1">
+                        <p className="font-medium text-emerald-600 text-lg">{ing.name}</p>
+                        <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded-full border ${getCategoryColorStyle(ing.setor)}`}>
+                            {ing.setor || 'Outros'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-1">Unidade: {ing.unit}</p>
                       <p className="text-xs text-gray-600">
                         E: {ing.Energia.toFixed(0)}Kcal, P: {ing.Proteína.toFixed(1)}g, C: {ing.Carboidrato.toFixed(1)}g, L: {ing.Lipídeos.toFixed(1)}g, Col: {ing.Colesterol.toFixed(0)}mg, FA: {ing.FibraAlimentar.toFixed(1)}g
                       </p>
                     </div>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-2 sm:mt-0 flex-shrink-0">
                       <Button variant="ghost" size="sm" onClick={() => updateView('editIngredient', { editIngredient: ing.id })} aria-label={`Editar ${ing.name}`}><IconEdit /></Button>
                       <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${ing.name}"? Esta ação não pode ser desfeita.`)) deleteIngredient(ing.id); }} aria-label={`Excluir ${ing.name}`}><IconTrash /></Button>
                     </div>
@@ -561,7 +618,7 @@ export default function DataManagementPage(): React.ReactElement {
                 )}
                 <div className="text-sm text-gray-600 space-y-2 mt-4">
                     <p><strong>Formato CSV Ingredientes:</strong> Cabeçalho: <code>{CSV_INGREDIENT_HEADERS.join(',')}</code></p>
-                    <p className="text-xs">Ex: nome,unidade,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g</p>
+                    <p className="text-xs">Ex: nome,unidade,setor,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g</p>
                     <p><strong>Formato CSV Receitas:</strong> Cabeçalho: <code>{CSV_RECIPE_HEADERS.join(',')}</code>. Ingredientes no formato "NomeIng1:Qtd1;NomeIng2:Qtd2".</p>
                     <p className="text-xs">Ex: nome,modo_preparo,"IngredienteA:100;IngredienteB:2",porcoes</p>
                 </div>

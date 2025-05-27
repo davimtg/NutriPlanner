@@ -8,7 +8,9 @@ import RecipeLibraryPage from './pages/RecipeLibraryPage';
 import RecipeDetailPage from './pages/RecipeDetailPage';
 import DataManagementPage from './pages/DataManagementPage';
 import ShoppingListPage from './pages/ShoppingListPage';
-import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconUpload } from './components/Icon';
+import ShoppingListSheetPage from './pages/ShoppingListSheetPage';
+import DietHistoryPage from './pages/DietHistoryPage'; // New import
+import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconHistory } from './components/Icon'; // Added IconHistory
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: <IconHome /> },
@@ -16,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/recipes', label: 'Receitas', icon: <IconBook /> },
   { path: '/manage-data', label: 'Gerenciar Dados', icon: <IconPlusCircle /> },
   { path: '/shopping-list', label: 'Lista de Compras', icon: <IconShoppingCart /> },
+  { path: '/diet-history', label: 'Histórico de Dietas', icon: <IconHistory /> }, // New Nav Item
 ];
 
 const App: React.FC = () => {
@@ -32,6 +35,8 @@ const App: React.FC = () => {
               <Route path="/recipe/:id" element={<RecipeDetailPage />} />
               <Route path="/manage-data" element={<DataManagementPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
+              <Route path="/shopping-list-sheet" element={<ShoppingListSheetPage />} />
+              <Route path="/diet-history" element={<DietHistoryPage />} /> {/* New Route */}
             </Routes>
           </main>
           <Footer />
@@ -54,7 +59,6 @@ const Navbar: React.FC = () => {
             NutriPlanner
           </Link>
           
-          {/* Desktop Menu */}
           <div className="hidden md:flex space-x-2">
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.path} to={item.path} currentPath={location.pathname} icon={item.icon}>
@@ -63,7 +67,6 @@ const Navbar: React.FC = () => {
             ))}
           </div>
 
-          {/* Mobile Menu Button */}
           <div className="md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -80,7 +83,6 @@ const Navbar: React.FC = () => {
           </div>
         </div>
       </div>
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white shadow-md pb-4">
           {NAV_ITEMS.map((item) => (

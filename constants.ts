@@ -1,4 +1,3 @@
-
 import { MealType, NutrientInfo } from './types';
 
 export const APP_NAME = "NutriPlanner";
@@ -35,7 +34,25 @@ export const UNITS_OF_MEASUREMENT = [
   { value: '100ml', label: '100 Mililitros (100ml)'},
 ];
 
-export const CSV_INGREDIENT_HEADERS = ['nome', 'unidade', 'energia_kcal', 'proteina_g', 'carboidrato_g', 'lipideos_g', 'colesterol_mg', 'fibra_alimentar_g'];
+export const CSV_INGREDIENT_HEADERS = ['nome', 'unidade', 'setor', 'energia_kcal', 'proteina_g', 'carboidrato_g', 'lipideos_g', 'colesterol_mg', 'fibra_alimentar_g'];
 export const CSV_RECIPE_HEADERS = ['nome', 'modo_preparo', 'ingredientes', 'porcoes'];
+
+// New CSV Headers for Diet Plan
+export const CSV_DIET_PLAN_HEADERS = [
+  'date', 
+  'mealType', 
+  'itemType', 
+  'itemId', 
+  'itemName', 
+  'quantity', 
+  'unit', 
+  'customName',
+  'energia_kcal',
+  'proteina_g',
+  'carboidrato_g',
+  'lipideos_g',
+  'colesterol_mg',
+  'fibra_alimentar_g'
+];
 
 export const PLACEHOLDER_IMAGE_URL = 'https://picsum.photos/400/300';

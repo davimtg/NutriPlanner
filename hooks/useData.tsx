@@ -1,26 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Ingredient, Recipe, DailyPlan, MealType, PlannedItem, ShoppingListItem, DataContextType, CsvIngredient, CsvRecipe, RecipeIngredient, NutrientInfo, ImportBatch } from '../types';
+import { 
+    Ingredient, Recipe, DailyPlan, MealType, PlannedItem, ShoppingListItem, DataContextType, 
+    CsvIngredient, CsvRecipe, RecipeIngredient, NutrientInfo, ImportBatch,
+    SavedDietPlan, CsvDietPlanItem // New types
+} from '../types';
 import { generateId } from '../utils/idGenerator';
-import { calculateRecipeNutrients, calculateMealNutrients, calculateDailyPlanNutrients } from '../utils/nutritionCalculator';
-import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL } from '../constants';
+import { calculateRecipeNutrients, calculateMealNutrients, calculateDailyPlanNutrients, calculatePlannedItemNutrients } from '../utils/nutritionCalculator';
+import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO, PLACEHOLDER_IMAGE_URL, CSV_DIET_PLAN_HEADERS } from '../constants';
+import Papa from 'papaparse';
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const initialIngredients: Ingredient[] = [
-    { id: generateId(), name: 'Maçã', unit: 'unidade', Energia: 95, Proteína: 0.5, Carboidrato: 25, Lipídeos: 0.3, Colesterol: 0, FibraAlimentar: 4.4 },
-    { id: generateId(), name: 'Banana', unit: 'unidade', Energia: 105, Proteína: 1.3, Carboidrato: 27, Lipídeos: 0.4, Colesterol: 0, FibraAlimentar: 3.1 },
-    { id: generateId(), name: 'Peito de Frango Grelhado', unit: '100g', Energia: 165, Proteína: 31, Carboidrato: 0, Lipídeos: 3.6, Colesterol: 85, FibraAlimentar: 0 },
-    { id: generateId(), name: 'Arroz Integral Cozido', unit: '100g', Energia: 111, Proteína: 2.6, Carboidrato: 23, Lipídeos: 0.9, Colesterol: 0, FibraAlimentar: 1.8 },
-    { id: generateId(), name: 'Ovo Cozido', unit: 'unidade', Energia: 78, Proteína: 6.3, Carboidrato: 0.6, Lipídeos: 5.3, Colesterol: 186, FibraAlimentar: 0 },
-    { id: generateId(), name: 'Aveia em Flocos', unit: '100g', Energia: 389, Proteína: 16.9, Carboidrato: 66.3, Lipídeos: 6.9, Colesterol: 0, FibraAlimentar: 10.6 },
-    { id: generateId(), name: 'Leite Desnatado', unit: '100ml', Energia: 36, Proteína: 3.4, Carboidrato: 5, Lipídeos: 0.1, Colesterol: 2, FibraAlimentar: 0 },
-    { id: generateId(), name: 'Alface Crespa', unit: '100g', Energia: 15, Proteína: 1.4, Carboidrato: 2.9, Lipídeos: 0.2, Colesterol: 0, FibraAlimentar: 1.3 },
-    { id: generateId(), name: 'Tomate Saladete', unit: '100g', Energia: 18, Proteína: 0.9, Carboidrato: 3.9, Lipídeos: 0.2, Colesterol: 0, FibraAlimentar: 1.2 },
-    { id: generateId(), name: 'Azeite Extra Virgem', unit: '100ml', Energia: 884, Proteína: 0, Carboidrato: 0, Lipídeos: 100, Colesterol: 0, FibraAlimentar: 0 },
+    { id: generateId(), name: 'Maçã', unit: 'unidade', setor: 'Hortifruti', Energia: 95, Proteína: 0.5, Carboidrato: 25, Lipídeos: 0.3, Colesterol: 0, FibraAlimentar: 4.4 },
+    { id: generateId(), name: 'Banana', unit: 'unidade', setor: 'Hortifruti', Energia: 105, Proteína: 1.3, Carboidrato: 27, Lipídeos: 0.4, Colesterol: 0, FibraAlimentar: 3.1 },
+    { id: generateId(), name: 'Peito de Frango Grelhado', unit: '100g', setor: 'Açougue', Energia: 165, Proteína: 31, Carboidrato: 0, Lipídeos: 3.6, Colesterol: 85, FibraAlimentar: 0 },
+    { id: generateId(), name: 'Arroz Integral Cozido', unit: '100g', setor: 'Mercearia', Energia: 111, Proteína: 2.6, Carboidrato: 23, Lipídeos: 0.9, Colesterol: 0, FibraAlimentar: 1.8 },
+    { id: generateId(), name: 'Ovo Cozido', unit: 'unidade', setor: 'Hortifruti', Energia: 78, Proteína: 6.3, Carboidrato: 0.6, Lipídeos: 5.3, Colesterol: 186, FibraAlimentar: 0 },
+    { id: generateId(), name: 'Aveia em Flocos', unit: '100g', setor: 'Mercearia', Energia: 389, Proteína: 16.9, Carboidrato: 66.3, Lipídeos: 6.9, Colesterol: 0, FibraAlimentar: 10.6 },
+    { id: generateId(), name: 'Leite Desnatado', unit: '100ml', setor: 'Laticínios', Energia: 36, Proteína: 3.4, Carboidrato: 5, Lipídeos: 0.1, Colesterol: 2, FibraAlimentar: 0 },
+    { id: generateId(), name: 'Alface Crespa', unit: '100g', setor: 'Hortifruti', Energia: 15, Proteína: 1.4, Carboidrato: 2.9, Lipídeos: 0.2, Colesterol: 0, FibraAlimentar: 1.3 },
+    { id: generateId(), name: 'Tomate Saladete', unit: '100g', setor: 'Hortifruti', Energia: 18, Proteína: 0.9, Carboidrato: 3.9, Lipídeos: 0.2, Colesterol: 0, FibraAlimentar: 1.2 },
+    { id: generateId(), name: 'Azeite Extra Virgem', unit: '100ml', setor: 'Mercearia', Energia: 884, Proteína: 0, Carboidrato: 0, Lipídeos: 100, Colesterol: 0, FibraAlimentar: 0 },
 ];
 
-const initialRecipes: Recipe[] = []; // Will be populated by addRecipe, which calculates nutrients
-
+const initialRecipes: Recipe[] = []; 
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
@@ -43,36 +47,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localData ? JSON.parse(localData) : [];
   });
 
+  const [savedDietPlans, setSavedDietPlans] = useState<SavedDietPlan[]>(() => {
+    const localData = localStorage.getItem('nutriplanner_savedDietPlans');
+    return localData ? JSON.parse(localData) : [];
+  });
 
-  useEffect(() => {
-    localStorage.setItem('nutriplanner_ingredients', JSON.stringify(ingredients));
-  }, [ingredients]);
+  const [globalTargetNutrients, setGlobalTargetNutrients] = useState<NutrientInfo>(() => {
+    const localData = localStorage.getItem('nutriplanner_globalTargetNutrients');
+    return localData ? JSON.parse(localData) : { Energia: 2000, Proteína: 100, Carboidrato: 250, Lipídeos: 70, Colesterol: 300, FibraAlimentar: 30 };
+  });
 
-  useEffect(() => {
-    localStorage.setItem('nutriplanner_recipes', JSON.stringify(recipes));
-  }, [recipes]);
 
-  useEffect(() => {
-    localStorage.setItem('nutriplanner_mealPlan', JSON.stringify(mealPlan));
-  }, [mealPlan]);
-
-  useEffect(() => {
-    localStorage.setItem('nutriplanner_importBatches', JSON.stringify(importBatches));
-  }, [importBatches]);
+  useEffect(() => { localStorage.setItem('nutriplanner_ingredients', JSON.stringify(ingredients)); }, [ingredients]);
+  useEffect(() => { localStorage.setItem('nutriplanner_recipes', JSON.stringify(recipes)); }, [recipes]);
+  useEffect(() => { localStorage.setItem('nutriplanner_mealPlan', JSON.stringify(mealPlan)); }, [mealPlan]);
+  useEffect(() => { localStorage.setItem('nutriplanner_importBatches', JSON.stringify(importBatches)); }, [importBatches]);
+  useEffect(() => { localStorage.setItem('nutriplanner_savedDietPlans', JSON.stringify(savedDietPlans)); }, [savedDietPlans]);
+  useEffect(() => { localStorage.setItem('nutriplanner_globalTargetNutrients', JSON.stringify(globalTargetNutrients)); }, [globalTargetNutrients]);
 
 
   const getIngredientById = useCallback((id: string) => ingredients.find(ing => ing.id === id), [ingredients]);
-  
   const getRecipeById = useCallback((id: string) => recipes.find(rec => rec.id === id), [recipes]);
 
   const addIngredient = useCallback((ingredientData: Omit<Ingredient, 'id'>): Ingredient => {
-    const newIngredient: Ingredient = { ...DEFAULT_NUTRIENT_INFO, ...ingredientData, id: generateId() };
+    const newIngredient: Ingredient = { 
+        ...DEFAULT_NUTRIENT_INFO, 
+        ...ingredientData, 
+        id: generateId(),
+        setor: ingredientData.setor || 'Outros' 
+    };
     setIngredients(prev => [...prev, newIngredient]);
     return newIngredient;
   }, []);
 
   const updateIngredient = useCallback((updatedIngredient: Ingredient) => {
-    setIngredients(prev => prev.map(ing => ing.id === updatedIngredient.id ? updatedIngredient : ing));
+    setIngredients(prev => prev.map(ing => ing.id === updatedIngredient.id ? { ...updatedIngredient, setor: updatedIngredient.setor || 'Outros' } : ing));
   }, []);
 
   const deleteIngredient = useCallback((id: string) => {
@@ -82,7 +91,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteAllIngredients = useCallback(() => {
     setIngredients([]);
   }, []);
-
 
   const addRecipe = useCallback((recipeData: Omit<Recipe, 'id' | keyof NutrientInfo | 'totalNutrients'>): Recipe => {
     const totalNutrients = calculateRecipeNutrients(recipeData.ingredients, getIngredientById);
@@ -98,8 +106,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newRecipe: Recipe = {
       ...recipeData,
       id: generateId(),
-      ...nutrientsPerServing, // These are per serving
-      totalNutrients: totalNutrients, // This is for the whole recipe
+      ...nutrientsPerServing, 
+      totalNutrients: totalNutrients, 
       imageUrl: recipeData.imageUrl || `${PLACEHOLDER_IMAGE_URL}?=${generateId()}`,
     };
     setRecipes(prev => [...prev, newRecipe]);
@@ -107,7 +115,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [getIngredientById]);
 
   const updateRecipe = useCallback((updatedRecipeData: Recipe) => {
-    // Recalculate nutrients before updating
     const totalNutrients = calculateRecipeNutrients(updatedRecipeData.ingredients, getIngredientById);
     const nutrientsPerServing: NutrientInfo = updatedRecipeData.servings > 0 ? {
         Energia: totalNutrients.Energia / updatedRecipeData.servings,
@@ -123,7 +130,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...nutrientsPerServing,
         totalNutrients: totalNutrients,
     };
-
     setRecipes(prev => prev.map(rec => rec.id === fullyUpdatedRecipe.id ? fullyUpdatedRecipe : rec));
   }, [getIngredientById]);
 
@@ -211,20 +217,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         items: updatedMeals[mealIndex].items.map(item => item.id === updatedItem.id ? updatedItem : item)
     };
     updateDailyPlan({...plan, meals: updatedMeals});
-
   }, [getDailyPlan, updateDailyPlan]);
 
-
   const getShoppingList = useCallback((startDate: string, endDate: string): ShoppingListItem[] => {
-    const list: ShoppingListItem[] = [];
     const consolidated: { [ingredientId: string]: ShoppingListItem } = {};
-
     const start = new Date(startDate + 'T00:00:00'); 
     const end = new Date(endDate + 'T23:59:59');
 
-    mealPlan.forEach(dailyPlan => {
-      const planDate = new Date(dailyPlan.date + 'T00:00:00');
-      if (planDate >= start && planDate <= end) {
+    mealPlan.filter(dp => {
+        const planDate = new Date(dp.date + 'T00:00:00');
+        return planDate >= start && planDate <= end;
+    }).forEach(dailyPlan => {
         dailyPlan.meals.forEach(meal => {
           meal.items.forEach(item => {
             if (item.type === 'ingredient') {
@@ -239,12 +242,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     totalQuantity: item.quantity,
                     unit: ingredient.unit,
                     purchased: false,
+                    category: ingredient.setor || 'Outros',
                   };
                 }
               }
             } else if (item.type === 'recipe') {
               const recipe = getRecipeById(item.itemId);
-              if (recipe) {
+              if (recipe && recipe.servings > 0) {
                 recipe.ingredients.forEach(recipeIng => {
                   const ingredient = getIngredientById(recipeIng.ingredientId);
                   if (ingredient) {
@@ -258,6 +262,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         totalQuantity: quantityNeeded,
                         unit: ingredient.unit,
                         purchased: false,
+                        category: ingredient.setor || 'Outros',
                       };
                     }
                   }
@@ -266,7 +271,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           });
         });
-      }
     });
     return Object.values(consolidated);
   }, [mealPlan, getIngredientById, getRecipeById]);
@@ -287,6 +291,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const ingredient: Omit<Ingredient, 'id'> = {
           name: csvIng.nome.trim(),
           unit: csvIng.unidade.trim(),
+          setor: csvIng.setor?.trim() || 'Outros',
           Energia: parseFloat(csvIng.energia_kcal) || 0,
           Proteína: parseFloat(csvIng.proteina_g) || 0,
           Carboidrato: parseFloat(csvIng.carboidrato_g) || 0,
@@ -301,21 +306,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentErrors.push(`Linha ${index + 2}: Erro ao processar dados - ${(e as Error).message}`);
       }
     });
-
     setIngredients(prev => [...prev, ...newIngredientsForState]);
-    
-    const newBatch: ImportBatch = {
-      id: generateId(),
-      filename,
-      date: new Date().toISOString(),
-      type: 'ingredients',
-      successCount: currentSuccessCount,
-      errorCount: currentErrors.length,
-      importedItemIds: successfullyImportedIds,
-      errors: currentErrors.length > 0 ? currentErrors : undefined,
-    };
+    const newBatch: ImportBatch = { id: generateId(), filename, date: new Date().toISOString(), type: 'ingredients', successCount: currentSuccessCount, errorCount: currentErrors.length, importedItemIds: successfullyImportedIds, errors: currentErrors.length > 0 ? currentErrors : undefined };
     setImportBatches(prev => [...prev, newBatch]);
-
     return { successCount: currentSuccessCount, errors: currentErrors };
   }, []);
   
@@ -338,113 +331,199 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         for (const ingStr of ingredientStrings) {
           const parts = ingStr.split(':');
-          if (parts.length !== 2) {
-            currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Formato de ingrediente inválido '${ingStr}'. Use 'NomeIngrediente:Quantidade'.`);
-            ingredientParsingError = true;
-            continue;
-          }
+          if (parts.length !== 2) { currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Formato de ingrediente inválido '${ingStr}'. Use 'NomeIngrediente:Quantidade'.`); ingredientParsingError = true; continue; }
           const ingName = parts[0].trim();
           const quantity = parseFloat(parts[1].replace(/[^\d.-]/g, ''));
-          
-          if (isNaN(quantity)) {
-             currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Quantidade inválida para '${ingName}'.`);
-             ingredientParsingError = true;
-             continue;
-          }
-
+          if (isNaN(quantity)) { currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Quantidade inválida para '${ingName}'.`); ingredientParsingError = true; continue; }
           let ingredient = ingredients.find(i => i.name.toLowerCase() === ingName.toLowerCase());
-          if (!ingredient) {
-            // Note: addIngredient updates state, which might be slightly delayed for the current batch processing.
-            // For immediate use in this batch, we rely on the returned ingredient.
-            // However, for simplicity in batch creation, we'll add to `createdIngredientNamesForBatch`
-            // and the main `ingredients` state will be updated by `addIngredient`.
-            const newTempIng = addIngredient({ // This will also update the main ingredients state
-              name: ingName,
-              unit: 'unidade', 
-              ...DEFAULT_NUTRIENT_INFO 
-            });
-            ingredient = newTempIng; // Use the newly created ingredient for this recipe
-            createdIngredientNamesForBatch.push(ingName);
-          }
+          if (!ingredient) { const newTempIng = addIngredient({ name: ingName, unit: 'unidade', setor: 'Outros', ...DEFAULT_NUTRIENT_INFO }); ingredient = newTempIng; createdIngredientNamesForBatch.push(ingName); }
           recipeIngredients.push({ ingredientId: ingredient.id, quantity });
         }
-
-        if (ingredientParsingError) return; // Skip this recipe if there were errors parsing its ingredients
-
+        if (ingredientParsingError) return; 
         const servings = parseInt(csvRec.porcoes, 10);
-        if (isNaN(servings) || servings <= 0) {
-          currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Número de porções inválido.`);
-          return;
-        }
-
-        const totalNutrients = calculateRecipeNutrients(recipeIngredients, getIngredientById); // Use getIngredientById to ensure fresh data
-        const nutrientsPerServing: NutrientInfo = servings > 0 ? {
-            Energia: totalNutrients.Energia / servings,
-            Proteína: totalNutrients.Proteína / servings,
-            Carboidrato: totalNutrients.Carboidrato / servings,
-            Lipídeos: totalNutrients.Lipídeos / servings,
-            Colesterol: totalNutrients.Colesterol / servings,
-            FibraAlimentar: totalNutrients.FibraAlimentar / servings,
-        } : { ...DEFAULT_NUTRIENT_INFO };
-        
+        if (isNaN(servings) || servings <= 0) { currentErrors.push(`Linha ${index + 2}, Receita '${csvRec.nome}': Número de porções inválido.`); return; }
+        const totalNutrients = calculateRecipeNutrients(recipeIngredients, getIngredientById); 
+        const nutrientsPerServing: NutrientInfo = servings > 0 ? { Energia: totalNutrients.Energia / servings, Proteína: totalNutrients.Proteína / servings, Carboidrato: totalNutrients.Carboidrato / servings, Lipídeos: totalNutrients.Lipídeos / servings, Colesterol: totalNutrients.Colesterol / servings, FibraAlimentar: totalNutrients.FibraAlimentar / servings, } : { ...DEFAULT_NUTRIENT_INFO };
         const newRecipeId = generateId();
-        const newRecipe: Recipe = {
-          id: newRecipeId,
-          name: csvRec.nome.trim(),
-          instructions: csvRec.modo_preparo.trim(),
-          servings: servings,
-          ingredients: recipeIngredients,
-          imageUrl: `${PLACEHOLDER_IMAGE_URL}?id=${newRecipeId}`,
-          ...nutrientsPerServing,
-          totalNutrients: totalNutrients
-        };
+        const newRecipe: Recipe = { id: newRecipeId, name: csvRec.nome.trim(), instructions: csvRec.modo_preparo.trim(), servings: servings, ingredients: recipeIngredients, imageUrl: `${PLACEHOLDER_IMAGE_URL}?id=${newRecipeId}`, ...nutrientsPerServing, totalNutrients: totalNutrients };
         newRecipesForState.push(newRecipe);
         successfullyImportedRecipeIds.push(newRecipeId);
         currentSuccessCount++;
-      } catch (e) {
-        currentErrors.push(`Linha ${index + 2}: Erro ao processar receita '${csvRec.nome}' - ${(e as Error).message}`);
-      }
+      } catch (e) { currentErrors.push(`Linha ${index + 2}: Erro ao processar receita '${csvRec.nome}' - ${(e as Error).message}`); }
     });
-
     setRecipes(prev => [...prev, ...newRecipesForState]);
-
-    const newBatch: ImportBatch = {
-      id: generateId(),
-      filename,
-      date: new Date().toISOString(),
-      type: 'recipes',
-      successCount: currentSuccessCount,
-      errorCount: currentErrors.length,
-      importedItemIds: successfullyImportedRecipeIds,
-      errors: currentErrors.length > 0 ? currentErrors : undefined,
-    };
+    const newBatch: ImportBatch = { id: generateId(), filename, date: new Date().toISOString(), type: 'recipes', successCount: currentSuccessCount, errorCount: currentErrors.length, importedItemIds: successfullyImportedRecipeIds, errors: currentErrors.length > 0 ? currentErrors : undefined,};
     setImportBatches(prev => [...prev, newBatch]);
-
     return { successCount: currentSuccessCount, errors: currentErrors, newIngredients: [...new Set(createdIngredientNamesForBatch)] };
   }, [ingredients, addIngredient, getIngredientById]);
-
 
   const deleteImportBatch = useCallback((batchId: string) => {
     const batchToDelete = importBatches.find(b => b.id === batchId);
     if (!batchToDelete) return;
-
-    if (batchToDelete.type === 'ingredients') {
-      setIngredients(prevIngs => prevIngs.filter(ing => !batchToDelete.importedItemIds.includes(ing.id)));
-    } else if (batchToDelete.type === 'recipes') {
-      setRecipes(prevRecs => prevRecs.filter(rec => !batchToDelete.importedItemIds.includes(rec.id)));
-    }
+    if (batchToDelete.type === 'ingredients') { setIngredients(prevIngs => prevIngs.filter(ing => !batchToDelete.importedItemIds.includes(ing.id))); } 
+    else if (batchToDelete.type === 'recipes') { setRecipes(prevRecs => prevRecs.filter(rec => !batchToDelete.importedItemIds.includes(rec.id)));}
     setImportBatches(prevBatches => prevBatches.filter(b => b.id !== batchId));
   }, [importBatches]);
 
+  // New Diet Plan Management Functions
+  const updateGlobalTargetNutrients = useCallback((targets: NutrientInfo) => {
+    setGlobalTargetNutrients(targets);
+  }, []);
+
+  const exportDietToCsv = useCallback((startDate: string, endDate: string): string => {
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T23:59:59');
+    const dietItemsForCsv: CsvDietPlanItem[] = [];
+
+    mealPlan
+      .filter(dp => {
+        const planDate = new Date(dp.date + 'T00:00:00');
+        return planDate >= start && planDate <= end;
+      })
+      .forEach(dailyPlan => {
+        dailyPlan.meals.forEach(meal => {
+          meal.items.forEach(item => {
+            const baseItem = item.type === 'ingredient' ? getIngredientById(item.itemId) : getRecipeById(item.itemId);
+            const itemNutrients = calculatePlannedItemNutrients(item, getIngredientById, getRecipeById);
+            const unit = item.type === 'ingredient' ? (baseItem as Ingredient)?.unit : 'porção(ões)';
+            
+            dietItemsForCsv.push({
+              date: dailyPlan.date,
+              mealType: meal.mealType,
+              itemType: item.type,
+              itemId: item.itemId,
+              itemName: baseItem?.name || 'Desconhecido',
+              quantity: item.quantity,
+              unit: unit,
+              customName: item.customName || '',
+              energia_kcal: itemNutrients.Energia,
+              proteina_g: itemNutrients.Proteína,
+              carboidrato_g: itemNutrients.Carboidrato,
+              lipideos_g: itemNutrients.Lipídeos,
+              colesterol_mg: itemNutrients.Colesterol,
+              fibra_alimentar_g: itemNutrients.FibraAlimentar,
+            });
+          });
+        });
+      });
+      return Papa.unparse(dietItemsForCsv, { header: true, columns: CSV_DIET_PLAN_HEADERS });
+  }, [mealPlan, getIngredientById, getRecipeById]);
+
+  const importDietFromCsv = useCallback((csvDietItems: CsvDietPlanItem[]): { success: boolean; message: string } => {
+    if (!csvDietItems || csvDietItems.length === 0) {
+        return { success: false, message: "Nenhum item encontrado no CSV." };
+    }
+    // Group by date
+    const plansByDate: { [date: string]: DailyPlan } = {};
+
+    for (const csvItem of csvDietItems) {
+        if (!csvItem.date || !csvItem.mealType || !csvItem.itemType || !csvItem.itemId || !csvItem.itemName || csvItem.quantity == null) {
+            console.warn("Item CSV inválido ou incompleto:", csvItem);
+            continue; 
+        }
+
+        // Ensure ingredient/recipe exists or handle gracefully (e.g., by name if ID is problematic)
+        let baseItemExists = false;
+        if (csvItem.itemType === 'ingredient') {
+            baseItemExists = !!getIngredientById(csvItem.itemId) || !!ingredients.find(i => i.name === csvItem.itemName);
+        } else {
+            baseItemExists = !!getRecipeById(csvItem.itemId) || !!recipes.find(r => r.name === csvItem.itemName);
+        }
+        
+        if (!baseItemExists) {
+            // For now, skip if item not found. Could be enhanced to create placeholders.
+            console.warn(`Item base "${csvItem.itemName}" (ID: ${csvItem.itemId}) não encontrado. Pulando.`);
+            continue;
+        }
+
+
+        if (!plansByDate[csvItem.date]) {
+            plansByDate[csvItem.date] = {
+                date: csvItem.date,
+                meals: MEAL_TYPES_ORDERED.map(mt => ({ mealType: mt, items: [] })),
+                totalNutrients: { ...DEFAULT_NUTRIENT_INFO }
+            };
+        }
+        const plan = plansByDate[csvItem.date];
+        let meal = plan.meals.find(m => m.mealType === csvItem.mealType);
+        if (!meal) {
+            meal = { mealType: csvItem.mealType, items: [] };
+            plan.meals.push(meal);
+        }
+        meal.items.push({
+            id: generateId(),
+            type: csvItem.itemType,
+            itemId: csvItem.itemId, // Rely on this ID from export
+            quantity: Number(csvItem.quantity),
+            customName: csvItem.customName
+        });
+    }
+
+    const newMealPlan = Object.values(plansByDate).map(plan => {
+        const updatedMeals = plan.meals.map(meal => ({
+            ...meal,
+            totalNutrients: calculateMealNutrients(meal, getIngredientById, getRecipeById)
+        }));
+        return {
+            ...plan,
+            meals: updatedMeals,
+            totalNutrients: calculateDailyPlanNutrients({ ...plan, meals: updatedMeals }, getIngredientById, getRecipeById)
+        };
+    });
+
+    // Merge with existing meal plan or replace. For now, this replaces.
+    // A merge strategy would be more complex (e.g., only update days present in CSV).
+    setMealPlan(newMealPlan.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    return { success: true, message: "Plano de dieta importado com sucesso. (Estratégia de substituição aplicada)" };
+  }, [getIngredientById, getRecipeById, ingredients, recipes]);
+
+  const saveCurrentDietPlan = useCallback((name: string, description: string | undefined, startDate: string, endDate: string) => {
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T23:59:59');
+    
+    const dailyPlansToSave = mealPlan.filter(dp => {
+        const planDate = new Date(dp.date + 'T00:00:00');
+        return planDate >= start && planDate <= end;
+    });
+
+    if (dailyPlansToSave.length === 0) {
+        alert("Nenhum dado no plano de refeições para o intervalo selecionado.");
+        return;
+    }
+
+    const newSavedPlan: SavedDietPlan = {
+        id: generateId(),
+        name,
+        description,
+        startDate,
+        endDate,
+        savedAt: new Date().toISOString(),
+        dailyPlans: JSON.parse(JSON.stringify(dailyPlansToSave)) // Deep copy
+    };
+    setSavedDietPlans(prev => [...prev, newSavedPlan].sort((a,b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()));
+  }, [mealPlan]);
+
+  const restoreSavedDietPlan = useCallback((planId: string) => {
+    const planToRestore = savedDietPlans.find(p => p.id === planId);
+    if (planToRestore) {
+        // Simple replacement strategy for now. A merge strategy would be more complex.
+        setMealPlan(JSON.parse(JSON.stringify(planToRestore.dailyPlans))); // Deep copy
+    }
+  }, [savedDietPlans]);
+
+  const deleteSavedDietPlan = useCallback((planId: string) => {
+    setSavedDietPlans(prev => prev.filter(p => p.id !== planId));
+  }, []);
 
   return (
     <DataContext.Provider value={{ 
-        ingredients, recipes, mealPlan, importBatches,
+        ingredients, recipes, mealPlan, importBatches, savedDietPlans, globalTargetNutrients,
         addIngredient, updateIngredient, deleteIngredient, deleteAllIngredients, getIngredientById,
         addRecipe, updateRecipe, deleteRecipe, getRecipeById,
         getDailyPlan, updateDailyPlan, addItemToMeal, removeItemFromMeal, updateItemInMeal,
         getShoppingList,
-        importIngredients, importRecipes, deleteImportBatch
+        importIngredients, importRecipes, deleteImportBatch,
+        exportDietToCsv, importDietFromCsv, saveCurrentDietPlan, restoreSavedDietPlan, deleteSavedDietPlan, updateGlobalTargetNutrients
     }}>
       {children}
     </DataContext.Provider>
