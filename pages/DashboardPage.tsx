@@ -6,20 +6,7 @@ import { DailyPlan, Meal, NutrientInfo, Ingredient, Recipe } from '../types';
 import { IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconEdit } from '../components/Icon';
 import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO } from '../constants';
 import Button from '../components/Button';
-
-const NutrientDisplay: React.FC<{ nutrients: NutrientInfo, title?: string }> = ({ nutrients, title }) => (
-  <div className="bg-white p-4 rounded-lg shadow">
-    {title && <h3 className="text-lg font-semibold text-gray-700 mb-2">{title}</h3>}
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-sm">
-      <p><strong className="text-emerald-600">Energia:</strong> {nutrients.Energia.toFixed(0)} Kcal</p>
-      <p><strong className="text-blue-600">Proteína:</strong> {nutrients.Proteína.toFixed(1)} g</p>
-      <p><strong className="text-orange-600">Carboidrato:</strong> {nutrients.Carboidrato.toFixed(1)} g</p>
-      <p><strong className="text-red-600">Lipídeos:</strong> {nutrients.Lipídeos.toFixed(1)} g</p>
-      <p><strong className="text-indigo-600">Colesterol:</strong> {nutrients.Colesterol.toFixed(0)} mg</p>
-      <p><strong className="text-purple-600">Fibra Alimentar:</strong> {nutrients.FibraAlimentar.toFixed(1)} g</p>
-    </div>
-  </div>
-);
+import NutrientDonutChart from '../components/NutrientDonutChart'; // Import the new donut chart
 
 const MealCard: React.FC<{ meal: Meal, date: string }> = ({ meal, date }) => {
   const { getIngredientById, getRecipeById } = useData();
@@ -50,16 +37,23 @@ const MealCard: React.FC<{ meal: Meal, date: string }> = ({ meal, date }) => {
       )}
       {meal.totalNutrients && (
         <div className="mt-4 pt-3 border-t border-gray-200">
-           <NutrientDisplay nutrients={meal.totalNutrients} />
+           {/* Placeholder for potential per-meal nutrient display if needed later */}
+           <div className="grid grid-cols-3 gap-1 text-xs">
+                <p><strong className="text-emerald-600">E:</strong> {meal.totalNutrients.Energia.toFixed(0)}</p>
+                <p><strong className="text-blue-600">P:</strong> {meal.totalNutrients.Proteína.toFixed(1)}</p>
+                <p><strong className="text-orange-600">C:</strong> {meal.totalNutrients.Carboidrato.toFixed(1)}</p>
+                <p><strong className="text-red-600">L:</strong> {meal.totalNutrients.Lipídeos.toFixed(1)}</p>
+                <p><strong className="text-indigo-600">Col:</strong> {meal.totalNutrients.Colesterol.toFixed(0)}</p>
+                <p><strong className="text-purple-600">Fib:</strong> {meal.totalNutrients.FibraAlimentar.toFixed(1)}</p>
+           </div>
         </div>
       )}
     </div>
   );
 };
 
-
 const DashboardPage: React.FC = () => {
-  const { getDailyPlan } = useData();
+  const { getDailyPlan, globalTargetNutrients } = useData();
   const today = new Date().toISOString().split('T')[0];
   const [currentDate, setCurrentDate] = React.useState(today);
   
@@ -71,6 +65,14 @@ const DashboardPage: React.FC = () => {
     { label: 'Adicionar Dados', to: '/manage-data', icon: <IconPlusCircle />, color: 'bg-yellow-500 hover:bg-yellow-600' },
     { label: 'Lista de Compras', to: '/shopping-list', icon: <IconShoppingCart />, color: 'bg-purple-500 hover:bg-purple-600' },
   ];
+
+  const nutrientsForDashboard: Array<{ key: keyof NutrientInfo; label: string; unit: string; colorClass: string }> = [
+    { key: 'Energia', label: 'Energia', unit: 'Kcal', colorClass: 'stroke-emerald-500 text-emerald-500' },
+    { key: 'Proteína', label: 'Proteína', unit: 'g', colorClass: 'stroke-blue-500 text-blue-500' },
+    { key: 'Carboidrato', label: 'Carboidrato', unit: 'g', colorClass: 'stroke-orange-500 text-orange-500' },
+    { key: 'Lipídeos', label: 'Lipídeos', unit: 'g', colorClass: 'stroke-red-500 text-red-500' },
+  ];
+
 
   return (
     <div className="space-y-8">
@@ -94,19 +96,39 @@ const DashboardPage: React.FC = () => {
       </section>
       
       <section>
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-3xl font-semibold text-gray-800">Plano de Hoje <span className="text-lg text-gray-500">({new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})</span></h2>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
+            <h2 className="text-3xl font-semibold text-gray-800">Resumo do Dia</h2>
             <input 
                 type="date" 
                 value={currentDate} 
                 onChange={(e) => setCurrentDate(e.target.value)}
                 className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
+                aria-label="Selecionar data para visualização"
             />
         </div>
+        <p className="text-sm text-gray-500 mb-4 -mt-4">Visualizando: {new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+
 
         {dailyPlan.totalNutrients && (
-          <div className="mb-6">
-            <NutrientDisplay nutrients={dailyPlan.totalNutrients} title="Resumo Nutricional do Dia" />
+          <div className="mb-6 bg-gray-50 p-4 rounded-lg shadow-inner">
+            <h3 className="text-xl font-semibold text-gray-700 mb-3 text-center">Consumo Diário vs. Metas</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              {nutrientsForDashboard.map(nutrient => (
+                <NutrientDonutChart
+                  key={nutrient.key}
+                  nutrientKey={nutrient.key}
+                  label={nutrient.label}
+                  consumed={dailyPlan.totalNutrients ? dailyPlan.totalNutrients[nutrient.key] : 0}
+                  target={globalTargetNutrients[nutrient.key]}
+                  unit={nutrient.unit}
+                  colorClass={nutrient.colorClass}
+                />
+              ))}
+            </div>
+            <div className="mt-4 text-xs text-gray-600">
+                <p><strong className="text-indigo-600">Colesterol Consumido:</strong> {dailyPlan.totalNutrients.Colesterol.toFixed(0)} mg / {globalTargetNutrients.Colesterol.toFixed(0)} mg (Meta)</p>
+                <p><strong className="text-purple-600">Fibra Alimentar Consumida:</strong> {dailyPlan.totalNutrients.FibraAlimentar.toFixed(1)} g / {globalTargetNutrients.FibraAlimentar.toFixed(1)} g (Meta)</p>
+            </div>
           </div>
         )}
         
@@ -116,8 +138,8 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
         {dailyPlan.meals.every(m => m.items.length === 0) && (
-             <div className="text-center py-10 bg-white rounded-lg shadow">
-                <p className="text-xl text-gray-500 mb-4">Nenhuma refeição planejada para hoje.</p>
+             <div className="text-center py-10 bg-white rounded-lg shadow mt-6">
+                <p className="text-xl text-gray-500 mb-4">Nenhuma refeição planejada para {new Date(currentDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}.</p>
                 <Link to={`/planner?date=${currentDate}`}>
                     <Button variant="primary" size="lg">Planejar Refeições</Button>
                 </Link>

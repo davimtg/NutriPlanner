@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useData } from '../hooks/useData';
-import { DailyPlan, Meal, MealType, PlannedItem, Ingredient, Recipe, NutrientInfo, CsvDietPlanItem } from '../types';
-import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO, CSV_DIET_PLAN_HEADERS } from '../constants';
+import { DailyPlan, Meal, MealType, PlannedItem, Ingredient, Recipe, NutrientInfo } from '../types';
+import { MEAL_TYPES_ORDERED, DEFAULT_NUTRIENT_INFO } from '../constants';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
-import { IconChevronLeft, IconChevronRight, IconPlus, IconTrash, IconEdit, IconSave, IconFileText, IconUpload, IconTarget, IconDownload } from '../components/Icon';
-import Papa from 'papaparse';
+import { IconChevronLeft, IconChevronRight, IconPlus, IconTrash, IconEdit, IconSettings, IconTarget } from '../components/Icon';
+// Removed: import DailyNutrientChart from '../components/DailyNutrientChart'; 
 
 const NutrientBar: React.FC<{ value: number; max: number; color: string; label: string; unit: string }> = ({ value, max, color, label, unit }) => {
   const percentage = max > 0 ? (value / max) * 100 : 0;
@@ -26,10 +26,9 @@ const NutrientBar: React.FC<{ value: number; max: number; color: string; label: 
 
 const PlannerPage: React.FC = () => {
   const { 
-    ingredients, recipes, getDailyPlan, updateDailyPlan, addItemToMeal, removeItemFromMeal, updateItemInMeal, 
+    ingredients, recipes, getDailyPlan, addItemToMeal, removeItemFromMeal, updateItemInMeal, 
     getIngredientById, getRecipeById,
-    globalTargetNutrients, updateGlobalTargetNutrients, // For global targets
-    exportDietToCsv, importDietFromCsv, saveCurrentDietPlan // For diet management
+    globalTargetNutrients 
   } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -47,17 +46,6 @@ const PlannerPage: React.FC = () => {
   const [currentItem, setCurrentItem] = useState<Partial<PlannedItem>>({});
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // State for Save Diet Modal
-  const [isSaveDietModalOpen, setIsSaveDietModalOpen] = useState(false);
-  const [saveDietName, setSaveDietName] = useState('');
-  const [saveDietDescription, setSaveDietDescription] = useState('');
-  const [saveDietStartDate, setSaveDietStartDate] = useState('');
-  const [saveDietEndDate, setSaveDietEndDate] = useState('');
-  
-  // State for Import Diet Modal/Feedback
-  const [importCsvFile, setImportCsvFile] = useState<File | null>(null);
-  const [importFeedback, setImportFeedback] = useState<{success: boolean; message: string} | null>(null);
 
 
   const formatDateISO = (date: Date): string => date.toISOString().split('T')[0];
@@ -80,13 +68,6 @@ const PlannerPage: React.FC = () => {
   useEffect(() => {
     setupWeek(currentDate);
   }, [currentDate, setupWeek]);
-
-  useEffect(() => { // Initialize save diet dates when weekDates are available
-    if (weekDates.length === 7) {
-      setSaveDietStartDate(formatDateISO(weekDates[0]));
-      setSaveDietEndDate(formatDateISO(weekDates[6]));
-    }
-  }, [weekDates]);
   
   const createEmptyPlan = (dateStr: string): DailyPlan => ({
     date: dateStr,
@@ -146,94 +127,12 @@ const PlannerPage: React.FC = () => {
     return searchResults.slice(0, 10);
   }, [searchTerm, ingredients, recipes]);
 
-  const handleTargetNutrientChange = (key: keyof NutrientInfo, value: string) => {
-    updateGlobalTargetNutrients({ ...globalTargetNutrients, [key]: parseFloat(value) || 0 });
-  };
-
-  const handleSaveDiet = () => {
-    if (!saveDietName.trim()) { alert("Por favor, dê um nome ao plano de dieta."); return; }
-    if (!saveDietStartDate || !saveDietEndDate) { alert("Por favor, selecione um intervalo de datas para salvar."); return; }
-    if (new Date(saveDietStartDate) > new Date(saveDietEndDate)) { alert("A data inicial não pode ser posterior à data final."); return; }
-    
-    saveCurrentDietPlan(saveDietName, saveDietDescription, saveDietStartDate, saveDietEndDate);
-    setIsSaveDietModalOpen(false);
-    setSaveDietName('');
-    setSaveDietDescription('');
-    // Optionally reset dates or keep them for next save attempt
-  };
-
-  const handleExportPDF = () => {
-    // Basic print functionality. For better PDF, use a library or dedicated service.
-    // Consider adding print-specific CSS (@media print) for layout.
-    window.print();
-  };
-
-  const handleExportCSV = () => {
-    if (weekDates.length < 7) { alert("Carregue uma semana válida primeiro."); return;}
-    const csvString = exportDietToCsv(formatDateISO(weekDates[0]), formatDateISO(weekDates[6]));
-    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `nutriplanner_dieta_${formatDateISO(weekDates[0])}_a_${formatDateISO(weekDates[6])}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-  };
-
-  const handleImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setImportCsvFile(event.target.files[0]);
-      setImportFeedback(null);
-    }
-  };
-
-  const handleImportDiet = () => {
-    if (!importCsvFile) { alert("Por favor, selecione um arquivo CSV para importar."); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const text = e.target?.result as string;
-        Papa.parse<CsvDietPlanItem>(text, {
-            header: true,
-            skipEmptyLines: true,
-            dynamicTyping: (field: string | number) => {
-                if (typeof field === 'string') {
-                    if (field === 'quantity' || field.endsWith('_kcal') || field.endsWith('_g') || field.endsWith('_mg')) {
-                        return true; 
-                    }
-                }
-                return false;
-            },
-            complete: (results) => {
-                if (results.errors.length > 0) {
-                    setImportFeedback({ success: false, message: "Erro ao parsear CSV: " + results.errors.map(err => `Linha ${err.row}: ${err.message}`).join('\n') });
-                    return;
-                }
-                const validItems = results.data.filter(item => item.date && item.mealType && item.itemType && item.itemId && item.itemName && typeof item.quantity === 'number')
-                const importResult = importDietFromCsv(validItems);
-                setImportFeedback(importResult);
-                if (importResult.success) {
-                    setupWeek(new Date()); 
-                }
-                setImportCsvFile(null);
-                const fileInput = document.getElementById('importDietCsvFile') as HTMLInputElement | null;
-                if (fileInput) fileInput.value = '';
-            },
-            error: (error: any) => {
-                setImportFeedback({ success: false, message: `Erro ao ler arquivo: ${error.message}`});
-            }
-        });
-    };
-    reader.readAsText(importCsvFile, 'UTF-8');
-  };
-
-
   if (!selectedDayPlan) {
     return <div className="text-center p-8">Carregando planejador...</div>;
   }
   
   const dayTotalNutrients = selectedDayPlan.totalNutrients || DEFAULT_NUTRIENT_INFO;
-  const nutrientLabels: { key: keyof NutrientInfo; label: string; unit: string; color: string }[] = [
+  const nutrientLabelsForBars: { key: keyof NutrientInfo; label: string; unit: string; color: string }[] = [
     { key: 'Energia', label: 'Energia', unit: 'Kcal', color: 'bg-emerald-500' },
     { key: 'Proteína', label: 'Proteína', unit: 'g', color: 'bg-blue-500' },
     { key: 'Carboidrato', label: 'Carboidrato', unit: 'g', color: 'bg-orange-500' },
@@ -255,49 +154,20 @@ const PlannerPage: React.FC = () => {
         </div>
       </header>
 
-      <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-        <h2 className="text-xl font-semibold text-gray-700 flex items-center"><IconTarget className="mr-2" />Metas Nutricionais Diárias Globais</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {nutrientLabels.map(({key, label, unit}) => (
-            <div key={key}>
-              <label htmlFor={`target-${key}`} className="block text-sm font-medium text-gray-700">{label} ({unit})</label>
-              <input
-                type="number" id={`target-${key}`} name={key}
-                value={globalTargetNutrients[key]}
-                onChange={(e) => handleTargetNutrientChange(key, e.target.value)}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-              />
+      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 rounded-lg shadow-md text-white">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h2 className="text-2xl font-semibold flex items-center"><IconSettings className="mr-2" />Ajustes e Ferramentas do Plano</h2>
+                <p className="text-sm opacity-90 mt-1">Defina suas metas nutricionais globais, salve, exporte ou importe planos de dieta completos.</p>
             </div>
-          ))}
+            <Link to="/plan-settings">
+                <Button variant="primary" className="bg-white text-emerald-600 hover:bg-emerald-50">
+                    Acessar Configurações
+                </Button>
+            </Link>
         </div>
-         <p className="text-xs text-gray-500">Estas metas são aplicadas a todos os dias para cálculo do resumo nutricional.</p>
       </div>
       
-      <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
-         <h2 className="text-xl font-semibold text-gray-700">Gerenciamento do Plano</h2>
-         <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setIsSaveDietModalOpen(true)} leftIcon={<IconSave />} variant="primary">Salvar Plano Atual</Button>
-            <Button onClick={handleExportCSV} leftIcon={<IconDownload />} variant="ghost">Exportar Semana (CSV)</Button>
-            <Button onClick={handleExportPDF} leftIcon={<IconFileText />} variant="ghost">Exportar Semana (PDF/Print)</Button>
-         </div>
-         <div className="mt-4 pt-4 border-t">
-             <h3 className="text-lg font-medium text-gray-700 mb-2">Importar Plano de CSV</h3>
-             <div className="flex items-end gap-2">
-                 <div className="flex-grow">
-                    <label htmlFor="importDietCsvFile" className="block text-sm font-medium text-gray-700">Arquivo CSV da Dieta</label>
-                    <input type="file" id="importDietCsvFile" accept=".csv" onChange={handleImportFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
-                 </div>
-                <Button onClick={handleImportDiet} disabled={!importCsvFile} leftIcon={<IconUpload />}>Importar</Button>
-             </div>
-            {importFeedback && (
-                <div className={`mt-2 p-3 rounded-md text-sm ${importFeedback.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {importFeedback.message}
-                </div>
-            )}
-         </div>
-      </div>
-
-
       <div className="grid grid-cols-7 gap-1 sm:gap-2 bg-white p-2 rounded-lg shadow">
         {weekDates.map(date => (
           <button key={date.toISOString()} onClick={() => handleDateChange(date)}
@@ -312,11 +182,16 @@ const PlannerPage: React.FC = () => {
         <h2 className="text-2xl font-semibold text-gray-800 mb-1">
           {new Date(selectedDayPlan.date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
         </h2>
-        <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-200 space-y-2">
-            <h3 className="text-sm font-semibold text-emerald-700 mb-1">Resumo Nutricional do Dia (vs Metas Globais)</h3>
-            {nutrientLabels.map(({key, label, unit, color}) => (
-                 <NutrientBar key={key} label={label} value={dayTotalNutrients[key]} max={globalTargetNutrients[key]} color={color} unit={unit} />
-            ))}
+        <div className="mb-6 p-4 bg-emerald-50 rounded-lg border border-emerald-200 space-y-3">
+            <h3 className="text-md font-semibold text-emerald-700 mb-2 flex items-center"><IconTarget className="mr-2 w-5 h-5"/>Resumo Nutricional do Dia (vs Metas Globais)</h3>
+            
+            {/* Individual Nutrient Bars for detailed view */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+              {nutrientLabelsForBars.map(({key, label, unit, color}) => (
+                   <NutrientBar key={key} label={label} value={dayTotalNutrients[key]} max={globalTargetNutrients[key]} color={color} unit={unit} />
+              ))}
+            </div>
+             <p className="text-xs text-gray-500 mt-2">Visão geral gráfica dos macronutrientes disponível no Dashboard.</p>
         </div>
         <div className="space-y-6">
           {selectedDayPlan.meals.map(meal => (
@@ -370,19 +245,6 @@ const PlannerPage: React.FC = () => {
           <div><label htmlFor="customName" className="block text-sm font-medium text-gray-700">Nome Personalizado (Opcional)</label><input type="text" id="customName" value={currentItem.customName || ''} onChange={(e) => setCurrentItem(prev => ({ ...prev, customName: e.target.value }))} placeholder="Ex: Maçã grande, Salada especial" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"/></div>
         </div>
         <div className="mt-6 flex justify-end space-x-3"><Button variant="ghost" onClick={closeModal}>Cancelar</Button><Button onClick={modalMode === 'add' ? handleAddItem : handleEditItem} disabled={!currentItem.itemId || !currentItem.quantity || currentItem.quantity <= 0}>{modalMode === 'add' ? 'Adicionar' : 'Salvar Alterações'}</Button></div>
-      </Modal>
-
-      <Modal isOpen={isSaveDietModalOpen} onClose={() => setIsSaveDietModalOpen(false)} title="Salvar Plano de Dieta Atual" size="md">
-        <div className="space-y-4">
-            <div><label htmlFor="saveDietName" className="block text-sm font-medium text-gray-700">Nome do Plano</label><input type="text" id="saveDietName" value={saveDietName} onChange={(e) => setSaveDietName(e.target.value)} placeholder="Ex: Dieta Hipercalórica Verão" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required/></div>
-            <div><label htmlFor="saveDietDescription" className="block text-sm font-medium text-gray-700">Descrição (Opcional)</label><textarea id="saveDietDescription" value={saveDietDescription} onChange={(e) => setSaveDietDescription(e.target.value)} rows={2} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"></textarea></div>
-            <div className="grid grid-cols-2 gap-4">
-                <div><label htmlFor="saveDietStartDate" className="block text-sm font-medium text-gray-700">Data Inicial do Plano</label><input type="date" id="saveDietStartDate" value={saveDietStartDate} onChange={(e) => setSaveDietStartDate(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/></div>
-                <div><label htmlFor="saveDietEndDate" className="block text-sm font-medium text-gray-700">Data Final do Plano</label><input type="date" id="saveDietEndDate" value={saveDietEndDate} onChange={(e) => setSaveDietEndDate(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/></div>
-            </div>
-            <p className="text-xs text-gray-500">O plano de refeições entre estas datas (inclusive) será salvo.</p>
-        </div>
-        <div className="mt-6 flex justify-end space-x-3"><Button variant="ghost" onClick={() => setIsSaveDietModalOpen(false)}>Cancelar</Button><Button onClick={handleSaveDiet}>Salvar Plano</Button></div>
       </Modal>
     </div>
   );

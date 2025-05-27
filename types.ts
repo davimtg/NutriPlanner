@@ -12,12 +12,17 @@ export interface Ingredient extends NutrientInfo {
   name: string;
   unit: string; // e.g., 'g', 'ml', 'unidade'
   setor?: string; 
+  brand?: string; 
+  averagePrice?: number; // New: Preço médio
+  purchaseLocation?: string; // New: Local de compra comum
 }
 
 export interface RecipeIngredient {
   ingredientId: string; 
   quantity: number; 
 }
+
+export type RecipeDifficulty = 'Fácil' | 'Médio' | 'Difícil';
 
 export interface Recipe extends NutrientInfo { 
   id: string;
@@ -27,6 +32,8 @@ export interface Recipe extends NutrientInfo {
   ingredients: RecipeIngredient[];
   imageUrl?: string;
   totalNutrients?: NutrientInfo; 
+  prepTime?: string; 
+  difficulty?: RecipeDifficulty; 
 }
 
 export enum MealType {
@@ -65,16 +72,36 @@ export interface ShoppingListItem {
   category?: string; 
 }
 
+// New: For items added manually to shopping list
+export interface ManualShoppingListItem {
+  id: string;
+  name: string;
+  purchased: boolean;
+  category: string; 
+}
+
+// New: Shopping List Template
+export interface ShoppingListTemplate {
+  id: string;
+  name: string;
+  items: ManualShoppingListItem[];
+  createdAt: string; // ISO string date
+}
+
+
 export interface CsvIngredient {
   nome: string;
   unidade: string;
+  setor?: string;
+  marca?: string; 
   energia_kcal: string;
   proteina_g: string;
   carboidrato_g: string;
   lipideos_g: string;
   colesterol_mg: string;
   fibra_alimentar_g: string;
-  setor?: string; 
+  preco_medio?: string; // New for CSV
+  local_compra?: string; // New for CSV
 }
 
 export interface CsvRecipe {
@@ -82,30 +109,31 @@ export interface CsvRecipe {
   modo_preparo: string;
   ingredientes: string; 
   porcoes: string; 
+  tempo_preparo?: string; 
+  dificuldade?: string; // New for CSV
 }
 
 export interface ImportBatch {
   id: string;
   filename: string;
   date: string; 
-  type: 'ingredients' | 'recipes';
+  type: 'ingredients' | 'recipes' | 'dietPlan'; 
   successCount: number;
   errorCount: number;
-  importedItemIds: string[]; 
+  importedItemIds?: string[]; 
   errors?: string[]; 
+  message?: string; 
 }
 
-// New interface for CSV Diet Plan Item
 export interface CsvDietPlanItem {
   date: string;
   mealType: MealType;
   itemType: 'ingredient' | 'recipe';
-  itemId: string; // ID of ingredient or recipe
-  itemName: string; // Name for easier matching during import if ID is lost or for human readability
+  itemId: string; 
+  itemName: string; 
   quantity: number;
-  unit: string; // Unit for the planned item (e.g., g, ml, porção)
+  unit: string; 
   customName?: string;
-  // Optional: Include per-item nutrients if needed for the CSV
   energia_kcal?: number;
   proteina_g?: number;
   carboidrato_g?: number;
@@ -114,33 +142,47 @@ export interface CsvDietPlanItem {
   fibra_alimentar_g?: number;
 }
 
-// New interface for Saved Diet Plan
 export interface SavedDietPlan {
   id: string;
   name: string;
   description?: string;
   startDate: string; 
   endDate: string; 
-  savedAt: string; // ISO string date
-  dailyPlans: DailyPlan[]; // The actual meal plan data for the specified period
+  savedAt: string; 
+  dailyPlans: DailyPlan[]; 
+  tags?: string[]; 
+  userNotes?: string; 
 }
 
+export interface UserUnitConversion {
+  id: string;
+  ingredientId: string;
+  quantityA: number;
+  unitA: string;
+  quantityB: number;
+  unitB: string;
+}
 
 export interface DataContextType {
   ingredients: Ingredient[];
   recipes: Recipe[];
   mealPlan: DailyPlan[];
   importBatches: ImportBatch[];
-  savedDietPlans: SavedDietPlan[]; // New state for saved diet plans
-  globalTargetNutrients: NutrientInfo; // New state for global targets
+  savedDietPlans: SavedDietPlan[]; 
+  globalTargetNutrients: NutrientInfo;
+  sectors: string[]; 
+  shoppingListTemplates: ShoppingListTemplate[]; 
+  userConversions: UserUnitConversion[]; // New for unit conversions
+  sectorKeywordFrequency: Record<string, Record<string, number>>; // For smart sector suggestions
 
   addIngredient: (ingredient: Omit<Ingredient, 'id'>) => Ingredient;
   updateIngredient: (ingredient: Ingredient) => void;
   deleteIngredient: (id: string) => void;
   deleteAllIngredients: () => void;
   getIngredientById: (id: string) => Ingredient | undefined;
+  updateIngredientsSectorBatch: (ingredientIds: string[], newSector: string) => void; 
   
-  addRecipe: (recipe: Omit<Recipe, 'id' | keyof NutrientInfo>) => Recipe;
+  addRecipe: (recipe: Omit<Recipe, 'id' | keyof NutrientInfo | 'totalNutrients'>) => Recipe;
   updateRecipe: (recipe: Recipe) => void;
   deleteRecipe: (id: string) => void;
   getRecipeById: (id: string) => Recipe | undefined;
@@ -153,15 +195,32 @@ export interface DataContextType {
   
   getShoppingList: (startDate: string, endDate: string) => ShoppingListItem[];
   
-  importIngredients: (ingredientsData: CsvIngredient[], filename: string) => { successCount: number; errors: string[] };
-  importRecipes: (recipesData: CsvRecipe[], filename: string) => { successCount: number; errors: string[]; newIngredients: string[] };
+  importIngredients: (ingredientsData: CsvIngredient[], filename: string) => ImportBatch;
+  importRecipes: (recipesData: CsvRecipe[], filename: string) => ImportBatch;
   deleteImportBatch: (batchId: string) => void;
 
-  // New functions for diet plan management
-  exportDietToCsv: (startDate: string, endDate: string) => string; // Returns CSV string
-  importDietFromCsv: (csvDietItems: CsvDietPlanItem[]) => { success: boolean; message: string };
-  saveCurrentDietPlan: (name: string, description: string | undefined, startDate: string, endDate: string) => void;
+  exportDietToCsv: (startDate: string, endDate: string) => string; 
+  importDietFromCsv: (csvDietItems: CsvDietPlanItem[], strategy: 'replace' | 'merge', filename: string) => ImportBatch; 
+  saveCurrentDietPlan: (name: string, description: string | undefined, startDate: string, endDate: string, tags?: string[], userNotes?: string) => SavedDietPlan | undefined; 
   restoreSavedDietPlan: (planId: string) => void;
   deleteSavedDietPlan: (planId: string) => void;
   updateGlobalTargetNutrients: (targets: NutrientInfo) => void;
+
+  addSector: (sector: string) => void;
+  deleteSector: (sector: string) => void;
+  updateSector: (oldSector: string, newSector: string) => void; 
+  
+  addShoppingListTemplate: (name: string, items: ManualShoppingListItem[]) => ShoppingListTemplate;
+  deleteShoppingListTemplate: (templateId: string) => void;
+  loadShoppingListTemplate: (templateId: string) => ManualShoppingListItem[] | undefined;
+
+  // New for unit conversions
+  addUserConversion: (conversion: Omit<UserUnitConversion, 'id'>) => UserUnitConversion;
+  updateUserConversion: (conversion: UserUnitConversion) => void;
+  deleteUserConversion: (conversionId: string) => void;
+  getUserConversionsForIngredient: (ingredientId: string) => UserUnitConversion[];
+
+  // New for smart sector suggestions
+  suggestSector: (ingredientName: string) => string | undefined;
+  // updateSectorKeywordFrequency is internal to useData for now
 }

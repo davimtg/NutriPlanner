@@ -1,4 +1,4 @@
-import { MealType, NutrientInfo } from './types';
+import { MealType, NutrientInfo, Recipe } from './types';
 
 export const APP_NAME = "NutriPlanner";
 
@@ -34,8 +34,8 @@ export const UNITS_OF_MEASUREMENT = [
   { value: '100ml', label: '100 Mililitros (100ml)'},
 ];
 
-export const CSV_INGREDIENT_HEADERS = ['nome', 'unidade', 'setor', 'energia_kcal', 'proteina_g', 'carboidrato_g', 'lipideos_g', 'colesterol_mg', 'fibra_alimentar_g'];
-export const CSV_RECIPE_HEADERS = ['nome', 'modo_preparo', 'ingredientes', 'porcoes'];
+export const CSV_INGREDIENT_HEADERS = ['nome', 'unidade', 'setor', 'marca', 'energia_kcal', 'proteina_g', 'carboidrato_g', 'lipideos_g', 'colesterol_mg', 'fibra_alimentar_g', 'preco_medio', 'local_compra'];
+export const CSV_RECIPE_HEADERS = ['nome', 'modo_preparo', 'ingredientes', 'porcoes', 'tempo_preparo', 'dificuldade'];
 
 // New CSV Headers for Diet Plan
 export const CSV_DIET_PLAN_HEADERS = [
@@ -56,3 +56,4 @@ export const CSV_DIET_PLAN_HEADERS = [
 ];
 
 export const PLACEHOLDER_IMAGE_URL = 'https://picsum.photos/400/300';
+export const RECIPE_DIFFICULTY_LEVELS: Array<Recipe['difficulty']> = ['Fácil', 'Médio', 'Difícil'];

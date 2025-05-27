@@ -9,42 +9,69 @@ import RecipeDetailPage from './pages/RecipeDetailPage';
 import DataManagementPage from './pages/DataManagementPage';
 import ShoppingListPage from './pages/ShoppingListPage';
 import ShoppingListSheetPage from './pages/ShoppingListSheetPage';
-import DietHistoryPage from './pages/DietHistoryPage'; // New import
-import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconHistory } from './components/Icon'; // Added IconHistory
+import DietHistoryPage from './pages/DietHistoryPage';
+import PlanSettingsPage from './pages/PlanSettingsPage'; 
+import SmartRecipePage from './pages/SmartRecipePage'; // New Page
+import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconHistory, IconSettings, IconSparkles } from './components/Icon'; // Added IconSparkles
+import { ToastContainer as GlobalToastContainer, useToasts as useGlobalToasts } from './components/Toast'; 
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: <IconHome /> },
   { path: '/planner', label: 'Planejador', icon: <IconCalendar /> },
   { path: '/recipes', label: 'Receitas', icon: <IconBook /> },
+  { path: '/smart-recipe', label: 'Sugestões IA', icon: <IconSparkles /> }, // New Nav Item
   { path: '/manage-data', label: 'Gerenciar Dados', icon: <IconPlusCircle /> },
   { path: '/shopping-list', label: 'Lista de Compras', icon: <IconShoppingCart /> },
-  { path: '/diet-history', label: 'Histórico de Dietas', icon: <IconHistory /> }, // New Nav Item
+  { path: '/diet-history', label: 'Histórico', icon: <IconHistory /> },
+  { path: '/plan-settings', label: 'Config. Plano', icon: <IconSettings /> }, 
 ];
 
+// Create a context for global toasts
+interface GlobalToastContextType {
+  addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info', duration?: number) => void;
+}
+export const GlobalToastContext = React.createContext<GlobalToastContextType | null>(null);
+
 const App: React.FC = () => {
+  const { toasts, addToast, removeToast } = useGlobalToasts();
+
   return (
-    <DataProvider>
-      <HashRouter>
-        <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
-          <Navbar />
-          <main className="flex-grow container mx-auto px-4 py-8">
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/planner" element={<PlannerPage />} />
-              <Route path="/recipes" element={<RecipeLibraryPage />} />
-              <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-              <Route path="/manage-data" element={<DataManagementPage />} />
-              <Route path="/shopping-list" element={<ShoppingListPage />} />
-              <Route path="/shopping-list-sheet" element={<ShoppingListSheetPage />} />
-              <Route path="/diet-history" element={<DietHistoryPage />} /> {/* New Route */}
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </HashRouter>
-    </DataProvider>
+    <GlobalToastContext.Provider value={{ addToast }}>
+      <DataProvider>
+        <HashRouter>
+          <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+            <Navbar />
+            <main className="flex-grow container mx-auto px-4 py-8">
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/planner" element={<PlannerPage />} />
+                <Route path="/recipes" element={<RecipeLibraryPage />} />
+                <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+                <Route path="/smart-recipe" element={<SmartRecipePage />} /> {/* New Route */}
+                <Route path="/manage-data" element={<DataManagementPage />} />
+                <Route path="/shopping-list" element={<ShoppingListPage />} />
+                <Route path="/shopping-list-sheet" element={<ShoppingListSheetPage />} />
+                <Route path="/diet-history" element={<DietHistoryPage />} />
+                <Route path="/plan-settings" element={<PlanSettingsPage />} /> 
+              </Routes>
+            </main>
+            <Footer />
+          </div>
+          <GlobalToastContainer toasts={toasts} onDismiss={removeToast} />
+        </HashRouter>
+      </DataProvider>
+    </GlobalToastContext.Provider>
   );
 };
+
+export const useGlobalToast = () => {
+  const context = React.useContext(GlobalToastContext);
+  if (!context) {
+    throw new Error('useGlobalToast must be used within a GlobalToastContext.Provider');
+  }
+  return context;
+};
+
 
 const Navbar: React.FC = () => {
   const location = useLocation();
@@ -71,6 +98,8 @@ const Navbar: React.FC = () => {
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="text-gray-600 hover:text-emerald-600 focus:outline-none"
+              aria-label={isMobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={isMobileMenuOpen}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 {isMobileMenuOpen ? (
@@ -112,6 +141,7 @@ const NavLink: React.FC<NavLinkProps> = ({ to, currentPath, children, icon, onCl
       onClick={onClick}
       className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out
         ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-700 hover:bg-emerald-100 hover:text-emerald-700'}`}
+      aria-current={isActive ? "page" : undefined}
     >
       {icon && <span className="mr-2">{icon}</span>}
       {children}
@@ -127,6 +157,7 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, currentPath, children, icon
         onClick={onClick}
         className={`block px-4 py-3 text-sm font-medium transition-colors duration-150 ease-in-out
           ${isActive ? 'bg-emerald-500 text-white' : 'text-gray-700 hover:bg-emerald-100 hover:text-emerald-700'}`}
+        aria-current={isActive ? "page" : undefined}
       >
         <div className="flex items-center">
           {icon && <span className="mr-3">{icon}</span>}
