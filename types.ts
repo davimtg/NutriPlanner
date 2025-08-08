@@ -1,3 +1,4 @@
+
 export interface NutrientInfo {
   Energia: number; // Kcal
   Proteína: number; // g
@@ -15,6 +16,7 @@ export interface Ingredient extends NutrientInfo {
   brand?: string; 
   averagePrice?: number; // New: Preço médio
   purchaseLocation?: string; // New: Local de compra comum
+  image?: string; // New: Image URL for the ingredient
 }
 
 export interface RecipeIngredient {
@@ -40,7 +42,10 @@ export enum MealType {
   Breakfast = 'Café da Manhã',
   Lunch = 'Almoço',
   Dinner = 'Jantar',
-  Snack = 'Lanche'
+  Snack = 'Lanche',
+  SnackManha = 'Lanche Manhã', // Example for more specific meal types
+  SnackTarde = 'Lanche Tarde', // Example for more specific meal types
+  Ceia = 'Ceia' // Example for more specific meal types
 }
 
 export interface PlannedItem {
@@ -55,12 +60,14 @@ export interface Meal {
   mealType: MealType;
   items: PlannedItem[];
   totalNutrients?: NutrientInfo;
+  description?: string; // Optional: For AI generated meal descriptions
 }
 
 export interface DailyPlan {
   date: string; 
   meals: Meal[];
   totalNutrients?: NutrientInfo;
+  summary?: string; // Optional: For AI generated day summaries
 }
 
 export interface ShoppingListItem {
@@ -102,6 +109,7 @@ export interface CsvIngredient {
   fibra_alimentar_g: string;
   preco_medio?: string; // New for CSV
   local_compra?: string; // New for CSV
+  link_imagem?: string; // New for CSV image URL
 }
 
 export interface CsvRecipe {
@@ -111,6 +119,7 @@ export interface CsvRecipe {
   porcoes: string; 
   tempo_preparo?: string; 
   dificuldade?: string; // New for CSV
+  link_imagem?: string; // New for CSV image URL
 }
 
 export interface ImportBatch {
@@ -163,6 +172,27 @@ export interface UserUnitConversion {
   unitB: string;
 }
 
+
+// Structure for AI-generated diet plan (can be refined in SmartRecipePage)
+export interface AiGeneratedMealItem {
+    name: string;
+    quantity: number | string; // AI might return string
+    unit: string;
+}
+export interface AiGeneratedMeal {
+    mealType: MealType | string; // AI might return string
+    description: string;
+    items: AiGeneratedMealItem[];
+    estimatedMealNutrients?: Partial<NutrientInfo>;
+}
+export interface AiGeneratedDailyPlan {
+    day: number;
+    summary?: string;
+    estimatedTotalNutrients?: Partial<NutrientInfo>;
+    meals: AiGeneratedMeal[];
+}
+
+
 export interface DataContextType {
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -192,6 +222,7 @@ export interface DataContextType {
   addItemToMeal: (date: string, mealType: MealType, item: Omit<PlannedItem, 'id'>) => void;
   removeItemFromMeal: (date: string, mealType: MealType, itemId: string) => void;
   updateItemInMeal: (date: string, mealType: MealType, item: PlannedItem) => void;
+  addAiGeneratedDietPlan: (planDays: AiGeneratedDailyPlan[], startDate: string) => Promise<void>; // New for AI Diet Plan
   
   getShoppingList: (startDate: string, endDate: string) => ShoppingListItem[];
   

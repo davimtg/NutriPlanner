@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { DataProvider } from './hooks/useData';
@@ -11,15 +12,17 @@ import ShoppingListPage from './pages/ShoppingListPage';
 import ShoppingListSheetPage from './pages/ShoppingListSheetPage';
 import DietHistoryPage from './pages/DietHistoryPage';
 import PlanSettingsPage from './pages/PlanSettingsPage'; 
-import SmartRecipePage from './pages/SmartRecipePage'; // New Page
-import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconHistory, IconSettings, IconSparkles } from './components/Icon'; // Added IconSparkles
+import SmartRecipePage from './pages/SmartRecipePage';
+import NutritionalCalculatorsPage from './pages/NutritionalCalculatorsPage'; // New Page
+import { IconHome, IconCalendar, IconBook, IconPlusCircle, IconShoppingCart, IconHistory, IconSettings, IconLightbulb, IconCalculator } from './components/Icon'; // Added IconCalculator, IconLightbulb
 import { ToastContainer as GlobalToastContainer, useToasts as useGlobalToasts } from './components/Toast'; 
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: <IconHome /> },
   { path: '/planner', label: 'Planejador', icon: <IconCalendar /> },
   { path: '/recipes', label: 'Receitas', icon: <IconBook /> },
-  { path: '/smart-recipe', label: 'Sugestões IA', icon: <IconSparkles /> }, // New Nav Item
+  { path: '/smart-recipe', label: 'Sugestões IA', icon: <IconLightbulb /> },
+  { path: '/calculators', label: 'Calculadoras', icon: <IconCalculator /> }, // New Nav Item
   { path: '/manage-data', label: 'Gerenciar Dados', icon: <IconPlusCircle /> },
   { path: '/shopping-list', label: 'Lista de Compras', icon: <IconShoppingCart /> },
   { path: '/diet-history', label: 'Histórico', icon: <IconHistory /> },
@@ -39,7 +42,7 @@ const App: React.FC = () => {
     <GlobalToastContext.Provider value={{ addToast }}>
       <DataProvider>
         <HashRouter>
-          <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+          <div className="min-h-screen flex flex-col bg-slate-50">
             <Navbar />
             <main className="flex-grow container mx-auto px-4 py-8">
               <Routes>
@@ -47,7 +50,8 @@ const App: React.FC = () => {
                 <Route path="/planner" element={<PlannerPage />} />
                 <Route path="/recipes" element={<RecipeLibraryPage />} />
                 <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-                <Route path="/smart-recipe" element={<SmartRecipePage />} /> {/* New Route */}
+                <Route path="/smart-recipe" element={<SmartRecipePage />} />
+                <Route path="/calculators" element={<NutritionalCalculatorsPage />} /> {/* New Route */}
                 <Route path="/manage-data" element={<DataManagementPage />} />
                 <Route path="/shopping-list" element={<ShoppingListPage />} />
                 <Route path="/shopping-list-sheet" element={<ShoppingListSheetPage />} />
@@ -86,7 +90,7 @@ const Navbar: React.FC = () => {
             NutriPlanner
           </Link>
           
-          <div className="hidden md:flex space-x-2">
+          <div className="hidden md:flex space-x-1 xl:space-x-2">
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.path} to={item.path} currentPath={location.pathname} icon={item.icon}>
                 {item.label}
@@ -97,7 +101,7 @@ const Navbar: React.FC = () => {
           <div className="md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-gray-600 hover:text-emerald-600 focus:outline-none"
+              className="text-slate-600 hover:text-emerald-600 focus:outline-none"
               aria-label={isMobileMenuOpen ? "Fechar menu" : "Abrir menu"}
               aria-expanded={isMobileMenuOpen}
             >
@@ -139,11 +143,11 @@ const NavLink: React.FC<NavLinkProps> = ({ to, currentPath, children, icon, onCl
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out
-        ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-700 hover:bg-emerald-100 hover:text-emerald-700'}`}
+      className={`flex items-center px-2.5 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors duration-150 ease-in-out
+        ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'}`}
       aria-current={isActive ? "page" : undefined}
     >
-      {icon && <span className="mr-2">{icon}</span>}
+      {icon && <span className="mr-1.5 xl:mr-2">{icon}</span>}
       {children}
     </Link>
   );
@@ -156,7 +160,7 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, currentPath, children, icon
         to={to}
         onClick={onClick}
         className={`block px-4 py-3 text-sm font-medium transition-colors duration-150 ease-in-out
-          ${isActive ? 'bg-emerald-500 text-white' : 'text-gray-700 hover:bg-emerald-100 hover:text-emerald-700'}`}
+          ${isActive ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'}`}
         aria-current={isActive ? "page" : undefined}
       >
         <div className="flex items-center">
@@ -170,9 +174,9 @@ const MobileNavLink: React.FC<NavLinkProps> = ({ to, currentPath, children, icon
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-gray-800 text-white text-center p-6 mt-auto">
+    <footer className="bg-slate-800 text-slate-200 text-center p-6 mt-auto">
       <p>&copy; {new Date().getFullYear()} NutriPlanner. Todos os direitos reservados.</p>
-      <p className="text-sm text-gray-400 mt-1">Planeje sua dieta, viva melhor!</p>
+      <p className="text-sm text-slate-400 mt-1">Planeje sua dieta, viva melhor!</p>
     </footer>
   );
 };

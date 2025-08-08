@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { IconX, IconCheckCircle, IconAlertTriangle, IconInfo } from './Icon'; 
 
@@ -22,26 +23,29 @@ const Toast: React.FC<ToastProps> = ({ id, message, type, duration = 5000, onDis
     return () => clearTimeout(timer);
   }, [id, duration, onDismiss]);
 
-  let bgColor = 'bg-gray-800';
+  let bgColor = 'bg-slate-800';
   let textColor = 'text-white';
   let IconComponent;
 
   switch (type) {
     case 'success':
       bgColor = 'bg-green-500';
+      textColor = 'text-white';
       IconComponent = <IconCheckCircle className="w-5 h-5 mr-2" />;
       break;
     case 'error':
-      bgColor = 'bg-red-500';
+      bgColor = 'bg-red-600';
+      textColor = 'text-white';
       IconComponent = <IconAlertTriangle className="w-5 h-5 mr-2" />;
       break;
     case 'warning':
-      bgColor = 'bg-yellow-500';
-      textColor = 'text-gray-800';
+      bgColor = 'bg-yellow-400';
+      textColor = 'text-yellow-900';
       IconComponent = <IconAlertTriangle className="w-5 h-5 mr-2" />;
       break;
     case 'info':
-      bgColor = 'bg-blue-500';
+      bgColor = 'bg-sky-500';
+      textColor = 'text-white';
       IconComponent = <IconInfo className="w-5 h-5 mr-2" />;
       break;
   }
@@ -61,8 +65,6 @@ const Toast: React.FC<ToastProps> = ({ id, message, type, duration = 5000, onDis
       >
         <IconX />
       </button>
-       {/* FIX: Removed jsx and global attributes from style tag for standard React compatibility. 
-          The keyframes animation should still work in modern browsers when the style tag is rendered in the document. */}
       <style>{`
         @keyframes toastIn {
           from {

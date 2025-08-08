@@ -10,6 +10,7 @@ import { IconPlus, IconUpload, IconTrash, IconEdit, IconDownload, IconSearch, Ic
 import Papa from 'papaparse';
 import { useGlobalToast } from '../App'; 
 import { generateId } from '../utils/idGenerator';
+import IngredientList from '../components/IngredientList'; // New Component
 
 interface IngredientFormProps {
   initialIngredient?: Partial<Ingredient>; 
@@ -31,7 +32,7 @@ const nutrientFormFields: { key: keyof NutrientInfo; label: string; unit: string
 
 const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSubmit, onCancel, sectors, addSector, suggestSector }) => {
   const [ingredient, setIngredient] = useState<Partial<Ingredient>>(
-    initialIngredient || { name: '', unit: 'g', setor: 'Outros', brand: '', averagePrice: undefined, purchaseLocation: '', ...DEFAULT_NUTRIENT_INFO }
+    initialIngredient || { name: '', unit: 'g', setor: 'Outros', brand: '', averagePrice: undefined, purchaseLocation: '', image: '', ...DEFAULT_NUTRIENT_INFO }
   );
   const [suggestedSector, setSuggestedSector] = useState<string | undefined>(undefined);
 
@@ -43,11 +44,12 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
             setor: initialIngredient.setor || 'Outros', 
             brand: initialIngredient.brand || '',
             averagePrice: initialIngredient.averagePrice === null ? undefined : initialIngredient.averagePrice,
-            purchaseLocation: initialIngredient.purchaseLocation || ''
+            purchaseLocation: initialIngredient.purchaseLocation || '',
+            image: initialIngredient.image || '',
         });
         setSuggestedSector(undefined); // No suggestion when editing existing with a sector
     } else {
-        setIngredient({ name: '', unit: 'g', setor: 'Outros', brand: '', averagePrice: undefined, purchaseLocation: '', ...DEFAULT_NUTRIENT_INFO });
+        setIngredient({ name: '', unit: 'g', setor: 'Outros', brand: '', averagePrice: undefined, purchaseLocation: '', image: '', ...DEFAULT_NUTRIENT_INFO });
     }
   }, [initialIngredient]);
 
@@ -111,6 +113,7 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
         brand: ingredient.brand?.trim() || undefined,
         averagePrice: ingredient.averagePrice,
         purchaseLocation: ingredient.purchaseLocation?.trim() || undefined,
+        image: ingredient.image?.trim() || undefined,
     };
     
     if (initialIngredient && initialIngredient.id) { 
@@ -122,6 +125,7 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
             brand: commonData.brand,
             averagePrice: commonData.averagePrice,
             purchaseLocation: commonData.purchaseLocation,
+            image: commonData.image,
             id: initialIngredient.id, 
         };
         onSubmit(ingredientToUpdate);
@@ -136,6 +140,7 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
             brand: restOfData.brand,
             averagePrice: restOfData.averagePrice,
             purchaseLocation: restOfData.purchaseLocation,
+            image: restOfData.image,
         };
         onSubmit(ingredientToAdd);
     }
@@ -146,9 +151,15 @@ const IngredientForm: React.FC<IngredientFormProps> = ({ initialIngredient, onSu
       <h3 className="text-xl font-semibold text-emerald-700 mb-3">
         {initialIngredient && initialIngredient.id ? 'Editar Ingrediente' : 'Adicionar Novo Ingrediente'}
       </h3>
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome do Ingrediente</label>
-        <input type="text" name="name" id="name" value={ingredient.name} onChange={(e) => handleNameChangeForSuggestion(e.target.value)} required className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome do Ingrediente</label>
+            <input type="text" name="name" id="name" value={ingredient.name} onChange={(e) => handleNameChangeForSuggestion(e.target.value)} required className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+        </div>
+        <div>
+            <label htmlFor="image" className="block text-sm font-medium text-gray-700">URL da Imagem (Opcional)</label>
+            <input type="url" name="image" id="image" value={ingredient.image || ''} onChange={handleChange} placeholder="https://example.com/image.jpg" className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"/>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -790,16 +801,16 @@ export default function DataManagementPage(): React.ReactElement {
             if (importType === 'ingredients') {
                 const expectedHeaders = CSV_INGREDIENT_HEADERS;
                 const actualHeaders = results.meta.fields;
-                if (!actualHeaders || !expectedHeaders.every(h => actualHeaders.includes(h))) {
-                    addToast(`Cabeçalhos do CSV de ingredientes inválidos. Esperado: ${expectedHeaders.join(', ')}`, "error");
+                if (!actualHeaders || !expectedHeaders.some(h => actualHeaders.includes(h))) { // Loosened check
+                    addToast(`Cabeçalhos do CSV de ingredientes não contêm colunas essenciais. Esperado: ${expectedHeaders.join(', ')}`, "error");
                     return;
                 }
                 batchResult = importIngredients(results.data as CsvIngredient[], currentFilename);
             } else { 
                 const expectedHeaders = CSV_RECIPE_HEADERS;
                 const actualHeaders = results.meta.fields;
-                 if (!actualHeaders || !expectedHeaders.every(h => actualHeaders.includes(h))) {
-                    addToast(`Cabeçalhos do CSV de receitas inválidos. Esperado: ${expectedHeaders.join(', ')}`, "error");
+                 if (!actualHeaders || !expectedHeaders.some(h => actualHeaders.includes(h))) { // Loosened check
+                    addToast(`Cabeçalhos do CSV de receitas não contêm colunas essenciais. Esperado: ${expectedHeaders.join(', ')}`, "error");
                     return;
                 }
                 batchResult = importRecipes(results.data as CsvRecipe[], currentFilename);
@@ -858,7 +869,8 @@ export default function DataManagementPage(): React.ReactElement {
       colesterol_mg: ing.Colesterol.toString(),
       fibra_alimentar_g: ing.FibraAlimentar.toString(),
       preco_medio: ing.averagePrice !== undefined ? ing.averagePrice.toString() : '',
-      local_compra: ing.purchaseLocation || ''
+      local_compra: ing.purchaseLocation || '',
+      link_imagem: ing.image || '',
     }));
     const csvString = Papa.unparse(dataToExport, { header: true, columns: CSV_INGREDIENT_HEADERS });
     downloadCSV(csvString, 'nutriplanner_ingredientes.csv');
@@ -877,6 +889,7 @@ export default function DataManagementPage(): React.ReactElement {
         porcoes: rec.servings.toString(),
         tempo_preparo: rec.prepTime || '',
         dificuldade: rec.difficulty || '',
+        link_imagem: rec.imageUrl || '',
       };
     });
     const csvString = Papa.unparse(dataToExport, { header: true, columns: CSV_RECIPE_HEADERS });
@@ -1029,37 +1042,18 @@ export default function DataManagementPage(): React.ReactElement {
                     </div>
                 </div>
             </div>
-            {filteredIngredients.length === 0 ? <p className="text-gray-500">{ingredients.length > 0 ? 'Nenhum ingrediente encontrado com os filtros aplicados.' : 'Nenhum ingrediente cadastrado.'}</p> : (
-              <ul className="space-y-3">
-                {filteredIngredients.map(ing => (
-                  <li key={ing.id} className="p-4 bg-white shadow rounded-lg flex flex-col sm:flex-row justify-between items-start">
-                    <div className="flex-grow">
-                      <div className="flex items-center mb-1 flex-wrap">
-                        <p className="font-medium text-emerald-600 text-lg mr-2">{ing.name}</p>
-                        {ing.brand && <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full mr-2">Marca: {ing.brand}</span>}
-                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getCategoryColorStyle(ing.setor)}`}>
-                            {ing.setor || 'Outros'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 mb-1">Unidade: {ing.unit}</p>
-                      { (ing.averagePrice !== undefined || ing.purchaseLocation) &&
-                        <p className="text-xs text-gray-500 mb-1">
-                            {ing.averagePrice !== undefined && <span className="mr-2"><IconDollarSign className="inline w-3 h-3 mr-0.5"/>R${ing.averagePrice.toFixed(2)}</span>}
-                            {ing.purchaseLocation && <span><IconMapPin className="inline w-3 h-3 mr-0.5"/>{ing.purchaseLocation}</span>}
-                        </p>
-                      }
-                      <p className="text-xs text-gray-600">
-                        E: {ing.Energia.toFixed(0)}Kcal, P: {ing.Proteína.toFixed(1)}g, C: {ing.Carboidrato.toFixed(1)}g, L: {ing.Lipídeos.toFixed(1)}g, Col: {ing.Colesterol.toFixed(0)}mg, FA: {ing.FibraAlimentar.toFixed(1)}g
-                      </p>
+            {ingredients.length === 0 ? <p className="text-gray-500 text-center py-8">Nenhum ingrediente cadastrado.</p> :
+             filteredIngredients.length === 0 ? <p className="text-gray-500 text-center py-8">Nenhum ingrediente encontrado com os filtros aplicados.</p> : (
+              <IngredientList
+                  ingredients={filteredIngredients}
+                  renderActions={(ing) => (
+                    <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
+                      <Button variant="ghost" size="sm" onClick={() => updateView('editIngredient', { editIngredient: ing.id })} aria-label={`Editar ${ing.name}`} title="Editar"><IconEdit /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => updateView('addIngredient', { cloneIngredient: ing.id })} aria-label={`Clonar ${ing.name}`} title="Clonar"><IconCopy /></Button>
+                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${ing.name}"? Esta ação não pode ser desfeita.`)) deleteIngredient(ing.id); }} aria-label={`Excluir ${ing.name}`} title="Excluir"><IconTrash /></Button>
                     </div>
-                    <div className="flex space-x-2 mt-2 sm:mt-0 flex-shrink-0">
-                      <Button variant="ghost" size="sm" onClick={() => updateView('editIngredient', { editIngredient: ing.id })} aria-label={`Editar ${ing.name}`}><IconEdit /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => updateView('addIngredient', { cloneIngredient: ing.id })} aria-label={`Clonar ${ing.name}`}><IconCopy /></Button>
-                      <Button variant="danger" size="sm" onClick={() => { if(confirm(`Excluir "${ing.name}"? Esta ação não pode ser desfeita.`)) deleteIngredient(ing.id); }} aria-label={`Excluir ${ing.name}`}><IconTrash /></Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                  )}
+              />
             )}
           </div>
         );
@@ -1229,9 +1223,9 @@ export default function DataManagementPage(): React.ReactElement {
                 </div>
                 <div className="text-sm text-gray-600 space-y-2 mt-4">
                     <p><strong>Formato CSV Ingredientes:</strong> Cabeçalho: <code>{CSV_INGREDIENT_HEADERS.join(',')}</code></p>
-                    <p className="text-xs">Ex: nome,unidade,setor,marca,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g,preco_medio,local_compra</p>
+                    <p className="text-xs">Ex: nome,unidade,setor,marca,energia_kcal,proteina_g,carboidrato_g,lipideos_g,colesterol_mg,fibra_alimentar_g,preco_medio,local_compra,link_imagem</p>
                     <p><strong>Formato CSV Receitas:</strong> Cabeçalho: <code>{CSV_RECIPE_HEADERS.join(',')}</code>. Ingredientes no formato "NomeIng1:Qtd1;NomeIng2:Qtd2".</p>
-                    <p className="text-xs">Ex: nome,modo_preparo,"IngredienteA:100;IngredienteB:2",porcoes,tempo_preparo,dificuldade</p>
+                    <p className="text-xs">Ex: nome,modo_preparo,"IngredienteA:100;IngredienteB:2",porcoes,tempo_preparo,dificuldade,link_imagem</p>
                 </div>
             </div>
             <div className="bg-white p-6 rounded-lg shadow">

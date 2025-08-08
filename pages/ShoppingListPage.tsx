@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
@@ -25,7 +24,7 @@ interface FullShoppingListItem extends Partial<LocalShoppingListItem>, Partial<M
 
 
 const ShoppingListPage: React.FC = () => {
-  const { getShoppingList, shoppingListTemplates, addShoppingListTemplate, deleteShoppingListTemplate, loadShoppingListTemplate } = useData();
+  const { getShoppingList, shoppingListTemplates, addShoppingListTemplate, deleteShoppingListTemplate, loadShoppingListTemplate, sectors } = useData();
   const { addToast } = useGlobalToast();
   const navigate = useNavigate();
 
@@ -45,7 +44,7 @@ const ShoppingListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [newItemName, setNewItemName] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState('Outros'); 
+  const [newItemCategory, setNewItemCategory] = useState(sectors.length > 0 ? sectors[0] : 'Outros'); 
 
   // For templates
   const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
@@ -102,7 +101,7 @@ const ShoppingListPage: React.FC = () => {
   
   const handleOpenAddItemModal = () => {
     setNewItemName('');
-    setNewItemCategory('Outros');
+    setNewItemCategory(sectors.length > 0 ? sectors[0] : 'Outros');
     setIsAddItemModalOpen(true);
   };
 
@@ -111,7 +110,7 @@ const ShoppingListPage: React.FC = () => {
       addToast("Nome do item não pode ser vazio.", "error");
       return;
     }
-    setManualItems(prev => [...prev, { id: generateId(), name: newItemName.trim(), purchased: false, category: newItemCategory }]);
+    setManualItems(prev => [...prev, { id: generateId(), name: newItemName.trim(), purchased: false, category: newItemCategory.trim() || 'Outros' }]);
     setIsAddItemModalOpen(false);
     addToast(`"${newItemName.trim()}" adicionado à lista.`, "success");
   };
@@ -137,7 +136,7 @@ const ShoppingListPage: React.FC = () => {
       addToast("Lista de compras está vazia.", "warning");
       return;
     }
-    let textOutput = `Lista de Compras (${startDate} a ${endDate}):\n\n`;
+    let textOutput = `Lista de Compras (${new Date(startDate+"T00:00:00").toLocaleDateString('pt-BR')} a ${new Date(endDate+"T00:00:00").toLocaleDateString('pt-BR')}):\n\n`;
     const categories = [...new Set(combinedList.map(item => item.category || 'Outros'))].sort();
 
     categories.forEach(category => {
@@ -173,205 +172,168 @@ const ShoppingListPage: React.FC = () => {
     return Object.entries(groups).sort(([catA], [catB]) => catA.localeCompare(catB));
   }, [combinedList]);
 
-  // Template functions
-  const handleOpenSaveTemplateModal = () => {
-    if (manualItems.length === 0) {
-      addToast("Não há itens manuais para salvar como template.", "warning");
-      return;
-    }
-    setTemplateName(`Template - ${new Date().toLocaleDateString('pt-BR')}`);
-    setIsSaveTemplateModalOpen(true);
-  };
-
-  const handleSaveTemplate = () => {
-    if (!templateName.trim()) {
-      addToast("Nome do template não pode ser vazio.", "error");
-      return;
-    }
-    addShoppingListTemplate(templateName, manualItems);
-    addToast(`Template "${templateName}" salvo com sucesso!`, "success");
-    setIsSaveTemplateModalOpen(false);
-    setTemplateName('');
-  };
-
-  const handleLoadTemplate = (templateId: string) => {
-    const itemsToLoad = loadShoppingListTemplate(templateId);
-    if (itemsToLoad) {
-      if (manualItems.length > 0 && !confirm("Isso substituirá seus itens manuais atuais. Deseja continuar?")) {
-        return;
-      }
-      setManualItems(itemsToLoad);
-      addToast("Template carregado!", "success");
-    } else {
-      addToast("Template não encontrado.", "error");
-    }
-    setIsLoadTemplateModalOpen(false);
-  };
-
-  const handleDeleteTemplate = (templateId: string, templateName: string) => {
-    if (confirm(`Tem certeza que deseja excluir o template "${templateName}"?`)) {
-      deleteShoppingListTemplate(templateId);
-      addToast(`Template "${templateName}" excluído.`, "info");
-    }
-  };
+  if (isLoading && combinedList.length === 0) { // Show loader only on initial load or full refresh
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div role="status" className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-solid border-emerald-500 border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]">
+          <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Carregando...</span>
+        </div>
+        <p className="ml-3 text-slate-700 text-lg">Gerando lista de compras...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <IconShoppingCart className="w-10 h-10 text-emerald-600" />
-          <h1 className="text-4xl font-bold text-gray-800">Lista de Compras</h1>
+          <h1 className="text-4xl font-bold text-slate-800">Lista de Compras</h1>
         </div>
-        <Button onClick={handleOpenAddItemModal} leftIcon={<IconPlus />} variant="primary">
-            Adicionar Item Manual
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleOpenAddItemModal} leftIcon={<IconPlus />} variant="primary">Adicionar Item Manual</Button>
+          <Button onClick={handleOpenSheetPage} leftIcon={<IconLayoutList />} variant="ghost">Ver Planilha Detalhada</Button>
+        </div>
       </header>
 
-      <div className="bg-white p-6 rounded-lg shadow-md space-y-4 md:flex md:items-end md:gap-4">
-        <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Data Inicial</label>
-          <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"/>
+      <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label htmlFor="startDate" className="block text-sm font-medium text-slate-700">Data Inicial</label>
+            <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500" />
+          </div>
+          <div>
+            <label htmlFor="endDate" className="block text-sm font-medium text-slate-700">Data Final</label>
+            <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500" />
+          </div>
+          <Button onClick={generateList} disabled={isLoading} leftIcon={<IconRefreshCw className={isLoading ? 'animate-spin' : ''} />} className="w-full md:w-auto">
+            {isLoading ? 'Atualizando...' : 'Atualizar Lista'}
+          </Button>
         </div>
-        <div>
-          <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">Data Final</label>
-          <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"/>
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200">
+            <Button onClick={handleExportToText} leftIcon={<IconCopy />} variant="ghost" size="sm">Copiar Lista (Texto)</Button>
+            <Button onClick={handleClearPurchased} variant="ghost" size="sm" leftIcon={<IconTrash />}>Limpar Comprados</Button>
+            <Button onClick={() => setIsSaveTemplateModalOpen(true)} leftIcon={<IconSave />} variant="ghost" size="sm">Salvar como Modelo</Button>
+            <Button onClick={() => setIsLoadTemplateModalOpen(true)} leftIcon={<IconLayoutList />} variant="ghost" size="sm">Carregar Modelo</Button>
         </div>
-        <Button onClick={generateList} disabled={isLoading} className="w-full md:w-auto" leftIcon={<IconRefreshCw />}>
-          {isLoading ? 'Gerando...' : 'Atualizar Lista'}
-        </Button>
       </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={handleExportToText} variant="ghost" leftIcon={<IconCopy/>}>Copiar Lista (Texto)</Button>
-        <Button onClick={handleClearPurchased} variant="danger" leftIcon={<IconTrash/>}>Limpar Comprados</Button>
-        {combinedList.length > 0 && (
-            <Button onClick={handleOpenSheetPage} variant="ghost" leftIcon={<IconSheet />}>
-                Abrir Planilha de Custos
-            </Button>
-        )}
-        <Button onClick={handleOpenSaveTemplateModal} variant="ghost" leftIcon={<IconSave />}>Salvar Itens Manuais como Template</Button>
-        {shoppingListTemplates.length > 0 && (
-            <Button onClick={() => setIsLoadTemplateModalOpen(true)} variant="ghost" leftIcon={<IconLayoutList />}>Carregar Template</Button>
-        )}
-      </div>
-
-
-      {isLoading && <p className="text-center text-gray-600 py-8">Carregando lista...</p>}
-
-      {!isLoading && combinedList.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <IconShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-xl text-gray-600">Nenhum item na lista de compras para o período selecionado.</p>
-          <p className="text-gray-500 mt-2">Planeje suas refeições ou adicione itens manualmente para gerar a lista.</p>
+      
+      {combinedList.length === 0 && !isLoading && (
+        <div className="text-center py-10 bg-white rounded-xl shadow-lg">
+          <IconShoppingCart className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <p className="text-xl text-slate-600">Sua lista de compras está vazia.</p>
+          <p className="text-slate-500 mt-2">Gere a lista com base no seu plano ou adicione itens manualmente.</p>
         </div>
       )}
 
-      {!isLoading && combinedList.length > 0 && (
-        groupedByCategory.map(([category, items]) => (
-            <div key={category} className="bg-white p-4 sm:p-6 rounded-lg shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-emerald-700">{category} ({items.length})</h2>
-                    <div className="flex space-x-2">
-                        <Button size="sm" variant="ghost" onClick={() => handleMarkCategoryAsPurchased(category, true)}>Marcar Tudo</Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleMarkCategoryAsPurchased(category, false)}>Desmarcar Tudo</Button>
-                    </div>
-                </div>
-                <ul className="space-y-3">
-                    {items.map(item => (
-                    <li key={item.id}
-                        className={`p-3 rounded-md transition-all duration-200 ease-in-out flex items-center justify-between
-                        ${item.purchased ? 'bg-gray-100 opacity-70' : 'bg-emerald-50 hover:bg-emerald-100'}`}>
-                        <div className="flex items-center flex-grow">
-                        <input type="checkbox" id={`item-${item.id}`} checked={item.purchased}
-                            onChange={() => togglePurchased(item.id, item.isManual)}
-                            className="h-5 w-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 mr-3 cursor-pointer flex-shrink-0"
-                            aria-label={`Marcar ${item.name} como comprado`}/>
-                        <label htmlFor={`item-${item.id}`} className={`cursor-pointer flex-grow ${item.purchased ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                            <span className="font-medium">{item.name}</span>
-                            {!item.isManual && item.totalQuantity && item.unit && (
-                            <span className="text-sm text-gray-600 ml-2">
-                                ({item.totalQuantity % 1 === 0 ? item.totalQuantity : item.totalQuantity.toFixed(2)} {item.unit})
-                            </span>
-                            )}
-                        </label>
+      {groupedByCategory.map(([category, items]) => (
+        <div key={category} className="bg-white p-5 rounded-xl shadow-lg">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-xl font-semibold text-emerald-700">{category}</h2>
+            <div className="space-x-2">
+              <Button size="sm" variant="ghost" onClick={() => handleMarkCategoryAsPurchased(category, true)}>Marcar Todos</Button>
+              <Button size="sm" variant="ghost" onClick={() => handleMarkCategoryAsPurchased(category, false)}>Desmarcar Todos</Button>
+            </div>
+          </div>
+          <ul className="space-y-2.5">
+            {items.map((item) => (
+              <li key={item.id} className={`flex items-center justify-between p-3 rounded-md transition-all duration-200 ${item.purchased ? 'bg-slate-200 ' : 'bg-slate-50 hover:bg-slate-100'}`}>
+                <label htmlFor={`item-${item.id}`} className="flex items-center cursor-pointer flex-grow min-w-0"> {/* Added min-w-0 for better truncation */}
+                  <input
+                    type="checkbox"
+                    id={`item-${item.id}`}
+                    checked={item.purchased}
+                    onChange={() => togglePurchased(item.id, item.isManual)}
+                    className="h-5 w-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 mr-3 flex-shrink-0"
+                  />
+                  <span className={`text-sm truncate ${item.purchased ? 'text-slate-500 line-through' : 'text-slate-800'}`} title={item.name}>
+                    {item.name}
+                    {!item.isManual && item.totalQuantity && item.unit && (
+                      <span className="text-xs text-slate-500 ml-1.5 whitespace-nowrap">({item.totalQuantity % 1 === 0 ? item.totalQuantity : item.totalQuantity.toFixed(2)} {item.unit})</span>
+                    )}
+                  </span>
+                </label>
+                {item.isManual && (
+                  <Button variant="danger" size="sm" onClick={() => handleDeleteManualItem(item.id)} aria-label={`Excluir ${item.name}`} className="ml-2 flex-shrink-0">
+                    <IconTrash />
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      <Modal isOpen={isAddItemModalOpen} onClose={() => setIsAddItemModalOpen(false)} title="Adicionar Item Manual à Lista">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="newItemName" className="block text-sm font-medium text-slate-700">Nome do Item</label>
+            <input type="text" id="newItemName" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm" />
+          </div>
+          <div>
+            <label htmlFor="newItemCategory" className="block text-sm font-medium text-slate-700">Categoria/Setor</label>
+            <select id="newItemCategory" value={newItemCategory} onChange={(e) => setNewItemCategory(e.target.value)} className="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm bg-white">
+              {sectors.sort().map(sector => <option key={sector} value={sector}>{sector}</option>)}
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end space-x-3">
+          <Button variant="ghost" onClick={() => setIsAddItemModalOpen(false)}>Cancelar</Button>
+          <Button onClick={handleAddManualItem}>Adicionar Item</Button>
+        </div>
+      </Modal>
+      
+      <Modal isOpen={isSaveTemplateModalOpen} onClose={() => setIsSaveTemplateModalOpen(false)} title="Salvar Lista como Modelo">
+        <div>
+          <label htmlFor="templateName" className="block text-sm font-medium text-slate-700">Nome do Modelo</label>
+          <input type="text" id="templateName" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="mt-1 block w-full p-2 border border-slate-300 rounded-md shadow-sm" />
+        </div>
+        <p className="text-xs text-slate-500 mt-2">Salvará os itens manuais atuais como um modelo reutilizável.</p>
+        <div className="mt-6 flex justify-end space-x-3">
+          <Button variant="ghost" onClick={() => setIsSaveTemplateModalOpen(false)}>Cancelar</Button>
+          <Button onClick={() => {
+            if (!templateName.trim()) { addToast("Nome do modelo não pode ser vazio.", "error"); return; }
+            addShoppingListTemplate(templateName, manualItems.map(it => ({...it, id: generateId()})));
+            addToast(`Modelo "${templateName}" salvo!`, "success");
+            setIsSaveTemplateModalOpen(false);
+            setTemplateName('');
+          }}>Salvar Modelo</Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isLoadTemplateModalOpen} onClose={() => setIsLoadTemplateModalOpen(false)} title="Carregar Modelo de Lista">
+        {shoppingListTemplates.length === 0 ? (
+            <p className="text-slate-600">Nenhum modelo salvo.</p>
+        ) : (
+            <ul className="space-y-2 max-h-60 overflow-y-auto">
+                {shoppingListTemplates.map(template => (
+                    <li key={template.id} className="flex justify-between items-center p-2 hover:bg-slate-100 rounded-md">
+                        <span className="text-slate-700">{template.name} <span className="text-xs text-slate-500">({template.items.length} itens)</span></span>
+                        <div className="space-x-1">
+                          <Button size="sm" onClick={() => {
+                              const itemsToLoad = loadShoppingListTemplate(template.id);
+                              if (itemsToLoad) {
+                                  setManualItems(prev => [...prev, ...itemsToLoad.map(it => ({...it, id: generateId(), purchased: false})) ]);
+                                  addToast(`Modelo "${template.name}" carregado e adicionado à lista.`, "success");
+                              }
+                              setIsLoadTemplateModalOpen(false);
+                          }}>Carregar</Button>
+                          <Button size="sm" variant="danger" onClick={() => {
+                            if (confirm(`Excluir modelo "${template.name}"?`)) {
+                              deleteShoppingListTemplate(template.id);
+                              addToast(`Modelo "${template.name}" excluído.`, "info");
+                            }
+                          }}><IconTrash/></Button>
                         </div>
-                        {item.isManual && (
-                            <Button variant="danger" size="sm" onClick={() => handleDeleteManualItem(item.id)} aria-label={`Remover ${item.name}`}>
-                                <IconTrash/>
-                            </Button>
-                        )}
                     </li>
-                    ))}
-                </ul>
-            </div>
-        ))
-      )}
-       <Modal isOpen={isAddItemModalOpen} onClose={() => setIsAddItemModalOpen(false)} title="Adicionar Item Manual à Lista">
-            <div className="space-y-4">
-                <div>
-                    <label htmlFor="newItemName" className="block text-sm font-medium text-gray-700">Nome do Item</label>
-                    <input type="text" id="newItemName" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
-                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
-                        placeholder="Ex: Papel Toalha"/>
-                </div>
-                <div>
-                    <label htmlFor="newItemCategory" className="block text-sm font-medium text-gray-700">Categoria</label>
-                    <input type="text" id="newItemCategory" value={newItemCategory} onChange={(e) => setNewItemCategory(e.target.value)}
-                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
-                        placeholder="Ex: Limpeza, Higiene"/>
-                </div>
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-                <Button variant="ghost" onClick={() => setIsAddItemModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleAddManualItem}>Adicionar Item</Button>
-            </div>
-        </Modal>
-
-        <Modal isOpen={isSaveTemplateModalOpen} onClose={() => setIsSaveTemplateModalOpen(false)} title="Salvar Template de Lista de Compras">
-            <p className="text-sm text-gray-600 mb-2">Salvar os {manualItems.length} itens manuais atuais como um template reutilizável.</p>
-            <div>
-                <label htmlFor="templateName" className="block text-sm font-medium text-gray-700">Nome do Template</label>
-                <input 
-                    type="text" 
-                    id="templateName" 
-                    value={templateName} 
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500"
-                    placeholder="Ex: Compras Semanais Básicas"
-                />
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-                <Button variant="ghost" onClick={() => setIsSaveTemplateModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleSaveTemplate}>Salvar Template</Button>
-            </div>
-        </Modal>
-
-        <Modal isOpen={isLoadTemplateModalOpen} onClose={() => setIsLoadTemplateModalOpen(false)} title="Carregar Template de Lista de Compras" size="md">
-            {shoppingListTemplates.length === 0 ? (
-                <p>Nenhum template salvo.</p>
-            ) : (
-                <ul className="space-y-2 max-h-96 overflow-y-auto">
-                    {shoppingListTemplates.map(template => (
-                        <li key={template.id} className="p-3 border rounded-md flex justify-between items-center hover:bg-gray-50">
-                            <div>
-                                <p className="font-medium text-gray-800">{template.name}</p>
-                                <p className="text-xs text-gray-500">{template.items.length} itens - Salvo em: {new Date(template.createdAt).toLocaleDateString('pt-BR')}</p>
-                            </div>
-                            <div className="flex space-x-2">
-                                <Button size="sm" onClick={() => handleLoadTemplate(template.id)}>Carregar</Button>
-                                <Button size="sm" variant="danger" onClick={() => handleDeleteTemplate(template.id, template.name)}><IconTrash /></Button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            )}
-            <div className="mt-6 text-right">
-                <Button variant="ghost" onClick={() => setIsLoadTemplateModalOpen(false)}>Fechar</Button>
-            </div>
-        </Modal>
-
+                ))}
+            </ul>
+        )}
+        <div className="mt-6 flex justify-end">
+            <Button variant="ghost" onClick={() => setIsLoadTemplateModalOpen(false)}>Fechar</Button>
+        </div>
+      </Modal>
     </div>
   );
 };

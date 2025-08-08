@@ -4,13 +4,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { Recipe, Ingredient, NutrientInfo } from '../types';
 import Button from '../components/Button';
-import { IconEdit, IconTrash, IconCalendar } from '../components/Icon';
+import { IconEdit, IconTrash, IconCalendar, IconChevronLeft } from '../components/Icon'; // Added IconChevronLeft
 import Modal from '../components/Modal';
 
 const NutrientTable: React.FC<{ nutrients: NutrientInfo, title: string, basis: string }> = ({ nutrients, title, basis }) => (
-  <div className="bg-gray-50 p-4 rounded-lg shadow">
-    <h4 className="text-md font-semibold text-gray-700 mb-2">{title} <span className="text-xs text-gray-500">({basis})</span></h4>
-    <ul className="text-sm space-y-1">
+  <div className="bg-slate-50 p-4 rounded-lg shadow-inner">
+    <h4 className="text-md font-semibold text-slate-700 mb-2">{title} <span className="text-xs text-slate-500">({basis})</span></h4>
+    <ul className="text-sm space-y-1 text-slate-600">
       <li><strong>Energia:</strong> {nutrients.Energia.toFixed(0)} Kcal</li>
       <li><strong>Proteína:</strong> {nutrients.Proteína.toFixed(1)} g</li>
       <li><strong>Carboidrato:</strong> {nutrients.Carboidrato.toFixed(1)} g</li>
@@ -33,7 +33,7 @@ const RecipeDetailPage: React.FC = () => {
   if (!recipe) {
     return (
       <div className="text-center p-10">
-        <h2 className="text-2xl font-semibold text-gray-700">Receita não encontrada.</h2>
+        <h2 className="text-2xl font-semibold text-slate-700">Receita não encontrada.</h2>
         <Link to="/recipes">
           <Button variant="primary" className="mt-4">Voltar para Biblioteca</Button>
         </Link>
@@ -60,32 +60,38 @@ const RecipeDetailPage: React.FC = () => {
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-xl shadow-2xl max-w-4xl mx-auto">
-      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h1 className="text-4xl font-bold text-emerald-700">{recipe.name}</h1>
-        <div className="flex space-x-2">
-            <Link to={`/planner?addRecipeId=${recipe.id}`}>
-                <Button variant="primary" leftIcon={<IconCalendar />}>Adicionar ao Plano</Button>
-            </Link>
-            <Link to={`/manage-data?editRecipe=${recipe.id}`}>
-                <Button variant="ghost" leftIcon={<IconEdit />}>Editar</Button>
-            </Link>
-            <Button variant="danger" onClick={() => setIsConfirmModalOpen(true)} leftIcon={<IconTrash />}>Excluir</Button>
+      <div className="mb-6">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} leftIcon={<IconChevronLeft />} className="mb-4">
+          Voltar
+        </Button>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h1 className="text-3xl md:text-4xl font-bold text-emerald-700 leading-tight">{recipe.name}</h1>
+            <div className="flex space-x-2 flex-shrink-0">
+                <Link to={`/planner?addRecipeId=${recipe.id}`}>
+                    <Button variant="primary" leftIcon={<IconCalendar />}>Adicionar</Button>
+                </Link>
+                <Link to={`/manage-data?editRecipe=${recipe.id}`}>
+                    <Button variant="ghost" leftIcon={<IconEdit />}>Editar</Button>
+                </Link>
+                <Button variant="danger" onClick={() => setIsConfirmModalOpen(true)} leftIcon={<IconTrash />}>Excluir</Button>
+            </div>
         </div>
       </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
         <div className="md:col-span-1">
           <img 
             src={recipe.imageUrl || `https://picsum.photos/seed/${recipe.id}/600/400`} 
             alt={recipe.name} 
-            className="w-full h-auto object-cover rounded-lg shadow-md"
+            className="w-full h-auto object-cover rounded-lg shadow-md aspect-square md:aspect-auto"
             onError={(e) => (e.currentTarget.src = 'https://picsum.photos/600/400?grayscale')}
           />
         </div>
         <div className="md:col-span-2 space-y-6">
           <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Ingredientes</h3>
-            <ul className="list-disc list-inside space-y-1 text-gray-700 bg-gray-50 p-4 rounded-md">
+            <h3 className="text-xl font-semibold text-slate-800 mb-2">Ingredientes</h3>
+            <ul className="list-disc list-inside space-y-1 text-slate-700 bg-slate-50 p-4 rounded-md border border-slate-200">
               {recipe.ingredients.map((item, index) => {
                 const ingredient = getIngredientById(item.ingredientId);
                 return (
@@ -95,7 +101,9 @@ const RecipeDetailPage: React.FC = () => {
                 );
               })}
             </ul>
-            <p className="text-sm text-gray-600 mt-2">Rendimento: {recipe.servings} porç{recipe.servings > 1 ? 'ões' : 'ão'}</p>
+            <p className="text-sm text-slate-600 mt-2">Rendimento: {recipe.servings} porç{recipe.servings > 1 ? 'ões' : 'ão'}</p>
+            {recipe.prepTime && <p className="text-sm text-slate-600">Tempo de Preparo: {recipe.prepTime}</p>}
+            {recipe.difficulty && <p className="text-sm text-slate-600 capitalize">Dificuldade: {recipe.difficulty}</p>}
           </div>
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
              <NutrientTable nutrients={nutrientsPerServing} title="Nutrientes" basis="por porção"/>
@@ -105,9 +113,9 @@ const RecipeDetailPage: React.FC = () => {
       </div>
 
       <div>
-        <h3 className="text-xl font-semibold text-gray-800 mb-3">Modo de Preparo</h3>
-        <div className="prose prose-emerald max-w-none text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded-md">
-          {recipe.instructions || <p className="italic">Instruções não fornecidas.</p>}
+        <h3 className="text-xl font-semibold text-slate-800 mb-3">Modo de Preparo</h3>
+        <div className="prose prose-emerald max-w-none text-slate-700 whitespace-pre-wrap bg-slate-50 p-5 rounded-md border border-slate-200">
+          {recipe.instructions ? recipe.instructions.split('\n').map((line, idx) => <p key={idx}>{line}</p>) : <p className="italic">Instruções não fornecidas.</p>}
         </div>
       </div>
       
@@ -116,7 +124,7 @@ const RecipeDetailPage: React.FC = () => {
         onClose={() => setIsConfirmModalOpen(false)}
         title="Confirmar Exclusão"
       >
-        <p>Tem certeza que deseja excluir a receita "{recipe.name}"? Esta ação não pode ser desfeita e irá removê-la de quaisquer planos de refeição existentes.</p>
+        <p className="text-slate-700">Tem certeza que deseja excluir a receita "{recipe.name}"? Esta ação não pode ser desfeita e irá removê-la de quaisquer planos de refeição existentes.</p>
         <div className="mt-6 flex justify-end space-x-3">
           <Button variant="ghost" onClick={() => setIsConfirmModalOpen(false)}>Cancelar</Button>
           <Button variant="danger" onClick={handleDelete}>Excluir</Button>
